@@ -489,27 +489,27 @@ const cat = {
 
 // Colors
 const C = {
-  fur:    '#D4722A',
-  furDk:  '#A85520',
-  furLt:  '#E8943A',
-  belly:  '#E8B87A',
-  muzzle: '#E8C490',
-  nose:   '#FF8090',
-  eye:    '#111',
+  fur:    '#FF8F3D', // Bright vibrant orange
+  furDk:  '#D35400', // Rich deep ginger shadow
+  furLt:  '#FFB073', // Beautiful soft highlight orange
+  belly:  '#FFF2E6', // Creamy white
+  muzzle: '#FFF5F0', // Cute pure white muzzle
+  nose:   '#FF7FA4', // Adorable warm strawberry pink
+  eye:    '#111111',
   eyegl:  '#ffffff',
-  stripe: '#B05018',
-  hoodie: '#111',
-  hoodieTxt:'#ddd',
-  chain:  '#FFD700',
+  stripe: '#E25E00', // Rich stripes
+  hoodie: '#16161B', // Midnight sleek dark hoodie
+  hoodieTxt:'#FF7F00', // Neon orange text/accent
+  chain:  '#FFD700', // Sparkling gold links
   chainDk:'#B8960A',
-  pants:  '#888',
-  shoe:   '#333',
-  shoeSole:'#555',
-  cap:    '#111',
-  sunglass:'#222',
-  sungLens:'rgba(30,30,50,0.85)',
-  claw:   '#fff',
-  shadow: 'rgba(255,107,0,0.3)',
+  pants:  '#2C2C35', // Premium carbon pants
+  shoe:   '#FFFFFF', // Bright sneakers
+  shoeSole:'#FF5F00', // Neon orange shoe soles
+  cap:    '#121214', // Stylish dark cap
+  sunglass:'#2A2A30', // Carbon frame sunglasses
+  sungLens:'rgba(10,10,20,0.5)', // Translucent glass so cute eyes peek through
+  claw:   '#ffffff',
+  shadow: 'rgba(0,0,0,0.18)',
 };
 
 // ---- Draw the animated cat at (cx, cy), scale s ----
@@ -536,7 +536,6 @@ function drawCat(cx, cy, s, arm, bob, tail, ear, walk) {
   ctx.translate(-28, 80 + bY);
   const lLeg = Math.sin(walk) * 8;
   ctx.rotate(lLeg * 0.04);
-  // pant leg
   ctx.fillStyle = C.pants;
   ctx.beginPath();
   ctx.roundRect(-16, 0, 32, 55, 4);
@@ -550,9 +549,9 @@ function drawCat(cx, cy, s, arm, bob, tail, ear, walk) {
   ctx.beginPath();
   ctx.rect(-18, 62, 36, 5);
   ctx.fill();
-  // Nike swoosh
-  ctx.strokeStyle = '#fff';
-  ctx.lineWidth = 1.5;
+  // Swoosh/Stripe on shoe
+  ctx.strokeStyle = '#ff7f00';
+  ctx.lineWidth = 1.8;
   ctx.beginPath();
   ctx.moveTo(-10, 60); ctx.bezierCurveTo(-4,55, 6,57, 12,58);
   ctx.stroke();
@@ -575,8 +574,8 @@ function drawCat(cx, cy, s, arm, bob, tail, ear, walk) {
   ctx.beginPath();
   ctx.rect(-18, 62, 36, 5);
   ctx.fill();
-  ctx.strokeStyle = '#fff';
-  ctx.lineWidth = 1.5;
+  ctx.strokeStyle = '#ff7f00';
+  ctx.lineWidth = 1.8;
   ctx.beginPath();
   ctx.moveTo(-10, 60); ctx.bezierCurveTo(-4,55, 6,57, 12,58);
   ctx.stroke();
@@ -610,14 +609,26 @@ function drawCat(cx, cy, s, arm, bob, tail, ear, walk) {
   ctx.beginPath();
   ctx.ellipse(0, 50, 55, 65, 0, 0, Math.PI*2);
   ctx.fill();
-  // hoodie text
-  ctx.fillStyle = C.hoodieTxt;
-  ctx.font = 'bold 11px Arial Narrow, sans-serif';
-  ctx.textAlign = 'center';
-  ctx.fillText('PAUSEN', 0, 46);
-  ctx.fillText('PLAY', 0, 60);
+
+  // Glowing Neon Orange/Gold Cat Paw Emblem on chest
+  ctx.save();
+  ctx.translate(0, 50);
+  ctx.fillStyle = '#FF7F00';
+  ctx.shadowColor = '#FF7F00';
+  ctx.shadowBlur = 6;
+  ctx.beginPath();
+  ctx.ellipse(0, 6, 12, 9, 0, 0, Math.PI*2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.ellipse(-10, -3, 4, 5, -0.2, 0, Math.PI*2);
+  ctx.ellipse(-4, -8, 4, 5, -0.1, 0, Math.PI*2);
+  ctx.ellipse(4, -8, 4, 5, 0.1, 0, Math.PI*2);
+  ctx.ellipse(10, -3, 4, 5, 0.2, 0, Math.PI*2);
+  ctx.fill();
+  ctx.restore();
+
   // hoodie pocket
-  ctx.fillStyle = '#1a1a1a';
+  ctx.fillStyle = '#0F0F12';
   ctx.beginPath();
   ctx.roundRect(-22, 62, 44, 22, 4);
   ctx.fill();
@@ -625,19 +636,30 @@ function drawCat(cx, cy, s, arm, bob, tail, ear, walk) {
 
   // ---- GOLD CHAIN ----
   ctx.save();
-  ctx.translate(0, bY - 10);
-  for (let i = 0; i < 12; i++) {
-    const a = (i / 11) * Math.PI;
-    const cx2 = Math.cos(Math.PI - a) * 36;
-    const cy2 = Math.sin(a) * 10 + 20;
+  ctx.translate(0, bY - 8);
+  for (let i = 0; i < 11; i++) {
+    const a = (i / 10) * Math.PI;
+    const cx2 = Math.cos(Math.PI - a) * 34;
+    const cy2 = Math.sin(a) * 9 + 18;
     ctx.beginPath();
-    ctx.ellipse(cx2, cy2, 5, 3.5, a, 0, Math.PI*2);
+    ctx.ellipse(cx2, cy2, 5.5, 3.8, a, 0, Math.PI*2);
     ctx.fillStyle = i % 2 === 0 ? C.chain : C.chainDk;
     ctx.fill();
     ctx.strokeStyle = 'rgba(0,0,0,0.3)';
     ctx.lineWidth = 0.5;
     ctx.stroke();
   }
+  // Star medallion hanging from chain!
+  ctx.save();
+  ctx.translate(0, 26);
+  ctx.rotate(Math.PI / 4);
+  ctx.fillStyle = '#FFD700';
+  ctx.shadowColor = '#FFD700';
+  ctx.shadowBlur = 4;
+  ctx.beginPath();
+  ctx.roundRect(-8, -8, 16, 16, 2); // Diamond shape medallion
+  ctx.fill();
+  ctx.restore();
   ctx.restore();
 
   // ---- ARMS ----
@@ -703,7 +725,7 @@ function drawCat(cx, cy, s, arm, bob, tail, ear, walk) {
   // Head base
   ctx.fillStyle = C.fur;
   ctx.beginPath();
-  ctx.ellipse(0, 20, 52, 50, 0, 0, Math.PI*2);
+  ctx.ellipse(0, 20, 56, 48, 0, 0, Math.PI*2);
   ctx.fill();
 
   // Forehead stripe pattern
@@ -717,46 +739,100 @@ function drawCat(cx, cy, s, arm, bob, tail, ear, walk) {
     ctx.stroke();
   }
 
-  // Cheek fur (lighter)
-  ctx.fillStyle = C.furLt;
+  // Cheek fur (lighter, fluffy)
+  ctx.fillStyle = C.belly;
   ctx.beginPath();
-  ctx.ellipse(-22, 30, 18, 14, -0.3, 0, Math.PI*2);
+  ctx.ellipse(-26, 28, 18, 12, -0.2, 0, Math.PI*2);
+  ctx.ellipse(26, 28, 18, 12, 0.2, 0, Math.PI*2);
+  ctx.fill();
+
+  // Soft Rosy Blush Cheeks (Unbelievably Cute!)
+  ctx.fillStyle = 'rgba(255, 110, 150, 0.45)';
+  ctx.beginPath();
+  ctx.ellipse(-26, 24, 11, 7, -0.1, 0, Math.PI*2);
+  ctx.ellipse(26, 24, 11, 7, 0.1, 0, Math.PI*2);
+  ctx.fill();
+
+  // Expressive Anime Eyes (Peeking over sunglasses!)
+  // Left Eye
+  ctx.save();
+  ctx.translate(-23, 2);
+  ctx.fillStyle = '#0D1117'; // socket
+  ctx.beginPath();
+  ctx.ellipse(0, 0, 11, 13, 0, 0, Math.PI*2);
+  ctx.fill();
+  ctx.fillStyle = '#00F0A0'; // emerald iris
+  ctx.beginPath();
+  ctx.ellipse(0, 1, 8, 10, 0, 0, Math.PI*2);
+  ctx.fill();
+  ctx.fillStyle = '#050A0F'; // pupil
+  ctx.beginPath();
+  ctx.ellipse(0, 1, 3.5, 7, 0, 0, Math.PI*2);
+  ctx.fill();
+  ctx.fillStyle = '#FFFFFF'; // catchlight
+  ctx.beginPath();
+  ctx.ellipse(-3, -3, 2.5, 3.5, -0.3, 0, Math.PI*2);
   ctx.fill();
   ctx.beginPath();
-  ctx.ellipse(22, 30, 18, 14, 0.3, 0, Math.PI*2);
+  ctx.ellipse(3, 4, 1.2, 1.2, 0, 0, Math.PI*2);
   ctx.fill();
+  ctx.restore();
+
+  // Right Eye
+  ctx.save();
+  ctx.translate(23, 2);
+  ctx.fillStyle = '#0D1117';
+  ctx.beginPath();
+  ctx.ellipse(0, 0, 11, 13, 0, 0, Math.PI*2);
+  ctx.fill();
+  ctx.fillStyle = '#00F0A0';
+  ctx.beginPath();
+  ctx.ellipse(0, 1, 8, 10, 0, 0, Math.PI*2);
+  ctx.fill();
+  ctx.fillStyle = '#050A0F';
+  ctx.beginPath();
+  ctx.ellipse(0, 1, 3.5, 7, 0, 0, Math.PI*2);
+  ctx.fill();
+  ctx.fillStyle = '#FFFFFF';
+  ctx.beginPath();
+  ctx.ellipse(-3, -3, 2.5, 3.5, -0.3, 0, Math.PI*2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.ellipse(3, 4, 1.2, 1.2, 0, 0, Math.PI*2);
+  ctx.fill();
+  ctx.restore();
 
   // Muzzle / snout
   ctx.fillStyle = C.muzzle;
   ctx.beginPath();
-  ctx.ellipse(0, 34, 22, 16, 0, 0, Math.PI*2);
+  ctx.ellipse(0, 26, 16, 11, 0, 0, Math.PI*2);
   ctx.fill();
 
   // Nose
   ctx.fillStyle = C.nose;
   ctx.beginPath();
-  ctx.moveTo(0, 27); ctx.lineTo(-6, 33); ctx.lineTo(6, 33);
+  ctx.moveTo(0, 21); ctx.lineTo(-4, 25); ctx.lineTo(4, 25);
+  ctx.closePath();
   ctx.fill();
 
   // Mouth
   ctx.strokeStyle = C.stripe;
   ctx.lineWidth = 1.5;
   ctx.beginPath();
-  ctx.moveTo(0, 33); ctx.lineTo(0, 38);
-  ctx.moveTo(0, 38); ctx.bezierCurveTo(-4, 42, -12, 42, -14, 40);
-  ctx.moveTo(0, 38); ctx.bezierCurveTo(4, 42, 12, 42, 14, 40);
+  ctx.moveTo(0, 25); ctx.lineTo(0, 29);
+  ctx.moveTo(0, 29); ctx.bezierCurveTo(-3, 32, -8, 32, -10, 30);
+  ctx.moveTo(0, 29); ctx.bezierCurveTo(3, 32, 8, 32, 10, 30);
   ctx.stroke();
 
   // Whiskers
-  ctx.strokeStyle = 'rgba(255,240,200,0.7)';
-  ctx.lineWidth = 1;
-  const wSide = [[-1,-1],[1,0],[1,1],[1,-1],[1,0],[1,1]];
+  ctx.strokeStyle = 'rgba(255,245,230,0.85)';
+  ctx.lineWidth = 1.2;
   [[-1,-1],[-1,0],[-1,1],[1,-1],[1,0],[1,1]].forEach(([dir,ang]) => {
     ctx.beginPath();
-    const wx = dir * 22;
-    const wy = 34 + ang * 4;
+    const wx = dir * 16;
+    const wy = 26 + ang * 4;
     ctx.moveTo(wx, wy);
-    ctx.lineTo(wx + dir * 30, wy + ang * 3);
+    ctx.lineTo(wx + dir * 28, wy + ang * 2.5);
     ctx.stroke();
   });
 
@@ -789,55 +865,65 @@ function drawCat(cx, cy, s, arm, bob, tail, ear, walk) {
   ctx.fill();
   ctx.restore();
 
-  // CAP
+  // CAP (curved backward cap)
   ctx.save();
-  ctx.translate(0, -30);
-  // brim
+  ctx.translate(0, -24);
+  // brim pointing back-left
   ctx.fillStyle = C.cap;
   ctx.beginPath();
-  ctx.ellipse(0, 0, 58, 12, 0, 0, Math.PI*2);
+  ctx.ellipse(-15, -12, 42, 10, -0.2, 0, Math.PI*2);
   ctx.fill();
   // crown
   ctx.beginPath();
   ctx.ellipse(0, -2, 48, 34, 0, Math.PI, 0);
   ctx.fill();
-  // cap button top
+  // button top
   ctx.fillStyle = '#333';
   ctx.beginPath();
   ctx.ellipse(0, -34, 5, 4, 0, 0, Math.PI*2);
   ctx.fill();
   ctx.restore();
 
-  // SUNGLASSES
+  // Tilted Sunglasses sitting beautiful and low
   ctx.save();
-  ctx.translate(0, 10);
+  ctx.translate(0, 16);
   // bridge
-  ctx.fillStyle = C.sunglass;
+  ctx.strokeStyle = '#FFD700';
+  ctx.lineWidth = 2.5;
   ctx.beginPath();
-  ctx.roundRect(-28, -12, 56, 18, 5);
+  ctx.moveTo(-16, -6);
+  ctx.lineTo(16, -6);
+  ctx.stroke();
+
+  // Left Lens with gold trim
+  ctx.fillStyle = C.sunglass;
+  ctx.strokeStyle = '#FFD700';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.roundRect(-25, -9, 20, 12, 3);
   ctx.fill();
-  // lenses
+  ctx.stroke();
+
+  // Right Lens with gold trim
+  ctx.beginPath();
+  ctx.roundRect(5, -9, 20, 12, 3);
+  ctx.fill();
+  ctx.stroke();
+
+  // Glass translucent lens
   ctx.fillStyle = C.sungLens;
   ctx.beginPath();
-  ctx.roundRect(-26, -11, 22, 14, 4);
+  ctx.roundRect(-24, -8, 18, 10, 2);
+  ctx.roundRect(6, -8, 18, 10, 2);
+  ctx.fill();
+
+  // Sleek lens sheen
+  ctx.fillStyle = 'rgba(255,255,255,0.2)';
+  ctx.beginPath();
+  ctx.moveTo(-22, -8); ctx.lineTo(-14, -8); ctx.lineTo(-19, 2); ctx.lineTo(-24, 2); ctx.closePath();
   ctx.fill();
   ctx.beginPath();
-  ctx.roundRect(4, -11, 22, 14, 4);
-  ctx.fill();
-  // temples
-  ctx.strokeStyle = C.sunglass;
-  ctx.lineWidth = 3;
-  ctx.beginPath();
-  ctx.moveTo(-26, -4); ctx.lineTo(-48, -2);
-  ctx.moveTo(26, -4);  ctx.lineTo(48, -2);
-  ctx.stroke();
-  // lens sheen
-  ctx.fillStyle = 'rgba(255,255,255,0.12)';
-  ctx.beginPath();
-  ctx.ellipse(-17, -8, 6, 3, -0.4, 0, Math.PI*2);
-  ctx.fill();
-  ctx.beginPath();
-  ctx.ellipse(13, -8, 6, 3, -0.4, 0, Math.PI*2);
+  ctx.moveTo(8, -8); ctx.lineTo(16, -8); ctx.lineTo(11, 2); ctx.lineTo(6, 2); ctx.closePath();
   ctx.fill();
   ctx.restore();
 
@@ -1221,13 +1307,14 @@ class SwagCat3D {
 
   buildCat(withPedestal) {
     const materials = {
-      fur: new THREE.MeshLambertMaterial({ color: 0xff6b00 }), // Cool orange
+      fur: new THREE.MeshStandardMaterial({ color: 0xff7c1a, roughness: 0.5 }), // Vibrant cute orange fur
       hoodie: new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.8 }), // Black hoodie
-      gold: new THREE.MeshStandardMaterial({ color: 0xffd700, metalness: 0.9, roughness: 0.1 }), // Gold Chain
+      gold: new THREE.MeshStandardMaterial({ color: 0xffd700, metalness: 0.95, roughness: 0.05 }), // Polished gold
       white: new THREE.MeshLambertMaterial({ color: 0xffffff }),
       black: new THREE.MeshBasicMaterial({ color: 0x050505 }),
-      pink: new THREE.MeshLambertMaterial({ color: 0xffa0b0 }),
-      pedestal: new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.6 }),
+      pink: new THREE.MeshLambertMaterial({ color: 0xff99aa }),
+      eyeColor: new THREE.MeshStandardMaterial({ color: 0x00ffaa, roughness: 0.1, emissive: 0x004411, emissiveIntensity: 0.3 }), // Glowing cute cat eyes
+      pedestal: new THREE.MeshStandardMaterial({ color: 0x16161a, roughness: 0.7 }),
     };
 
     // Pedestal if needed
@@ -1251,6 +1338,22 @@ class SwagCat3D {
     hoodTrim.scale.set(1.1, 0.9, 1);
     this.group.add(hoodTrim);
 
+    // Hoodie Drawstrings (Very stylish details!)
+    const stringLGeo = new THREE.CylinderGeometry(0.03, 0.03, 0.7, 6);
+    const stringL = new THREE.Mesh(stringLGeo, materials.white);
+    stringL.position.set(-0.35, 0.2, 1.0);
+    stringL.rotation.z = 0.15;
+
+    const tipL = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.1, 6), materials.gold);
+    tipL.position.y = -0.35;
+    stringL.add(tipL);
+
+    const stringR = stringL.clone();
+    stringR.position.x = 0.35;
+    stringR.rotation.z = -0.15;
+
+    this.group.add(stringL, stringR);
+
     // Pants (bottom edge of hoodie)
     const pantsGeo = new THREE.CylinderGeometry(1.22, 1.25, 0.3, 8);
     const pants = new THREE.Mesh(pantsGeo, materials.pedestal);
@@ -1272,6 +1375,18 @@ class SwagCat3D {
     this.group.add(leftSneaker);
     this.group.add(rightSneaker);
 
+    // Cute Tail (Curves gracefully upwards!)
+    const tailGroup = new THREE.Group();
+    tailGroup.position.set(0, -1.2, -1.0);
+    const tailSeg1 = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.8, 6), materials.fur);
+    tailSeg1.position.set(0, 0.3, 0);
+    tailSeg1.rotation.x = -0.6;
+    const tailSeg2 = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.8, 6), materials.fur);
+    tailSeg2.position.set(0, 0.8, -0.2);
+    tailSeg2.rotation.x = 0.6;
+    tailGroup.add(tailSeg1, tailSeg2);
+    this.group.add(tailGroup);
+
     // Head Group
     this.headGroup = new THREE.Group();
     this.headGroup.position.set(0, 1.1, 0);
@@ -1281,6 +1396,35 @@ class SwagCat3D {
     const headGeo = new THREE.BoxGeometry(1.4, 1.2, 1.2);
     const head = new THREE.Mesh(headGeo, materials.fur);
     this.headGroup.add(head);
+
+    // Big, Shiny, Expressive Cat Eyes (positioned slightly higher for cute peek-over effect)
+    const eyeGeo = new THREE.SphereGeometry(0.24, 8, 8);
+    const leftEye = new THREE.Mesh(eyeGeo, materials.eyeColor);
+    leftEye.position.set(-0.35, 0.22, 0.52);
+    leftEye.scale.set(1, 1, 0.3); // flatten a bit
+
+    // Pupil
+    const pupil = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.28, 0.08), materials.black);
+    pupil.position.set(0, 0, 0.1);
+    leftEye.add(pupil);
+
+    // Eye catchlight reflection (Super cute white spark!)
+    const catchlight = new THREE.Mesh(new THREE.SphereGeometry(0.06, 4, 4), materials.white);
+    catchlight.position.set(0.08, 0.08, 0.15);
+    leftEye.add(catchlight);
+
+    const rightEye = leftEye.clone();
+    rightEye.position.x = 0.35;
+
+    this.headGroup.add(leftEye, rightEye);
+
+    // Cute 3D Pink Blush Cheeks
+    const leftBlush = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 8), materials.pink);
+    leftBlush.position.set(-0.48, -0.05, 0.55);
+    leftBlush.scale.set(1.2, 0.7, 0.3); // flat oval shape
+    const rightBlush = leftBlush.clone();
+    rightBlush.position.x = 0.48;
+    this.headGroup.add(leftBlush, rightBlush);
 
     // Muzzle
     const muzzleGeo = new THREE.BoxGeometry(0.7, 0.4, 0.3);
@@ -1293,6 +1437,36 @@ class SwagCat3D {
     const nose = new THREE.Mesh(noseGeo, materials.pink);
     nose.position.set(0, -0.05, 0.82);
     this.headGroup.add(nose);
+
+    // Whiskers (3 cute white whiskers on each side!)
+    const whiskerGeo = new THREE.CylinderGeometry(0.015, 0.015, 0.7, 4);
+    const leftWhisker1 = new THREE.Mesh(whiskerGeo, materials.white);
+    leftWhisker1.position.set(-0.48, -0.15, 0.72);
+    leftWhisker1.rotation.z = Math.PI / 2.3;
+    leftWhisker1.rotation.y = -0.2;
+
+    const leftWhisker2 = leftWhisker1.clone();
+    leftWhisker2.position.y = -0.22;
+    leftWhisker2.rotation.z = Math.PI / 2.0;
+
+    const leftWhisker3 = leftWhisker1.clone();
+    leftWhisker3.position.y = -0.29;
+    leftWhisker3.rotation.z = Math.PI / 1.7;
+
+    const rightWhisker1 = leftWhisker1.clone();
+    rightWhisker1.position.x = 0.48;
+    rightWhisker1.rotation.z = -Math.PI / 2.3;
+    rightWhisker1.rotation.y = 0.2;
+
+    const rightWhisker2 = leftWhisker2.clone();
+    rightWhisker2.position.x = 0.48;
+    rightWhisker2.rotation.z = -Math.PI / 2.0;
+
+    const rightWhisker3 = leftWhisker3.clone();
+    rightWhisker3.position.x = 0.48;
+    rightWhisker3.rotation.z = -Math.PI / 1.7;
+
+    this.headGroup.add(leftWhisker1, leftWhisker2, leftWhisker3, rightWhisker1, rightWhisker2, rightWhisker3);
 
     // Ears
     const earGeo = new THREE.ConeGeometry(0.35, 0.7, 4);
@@ -1312,24 +1486,47 @@ class SwagCat3D {
     this.headGroup.add(leftEar);
     this.headGroup.add(rightEar);
 
-    // Sunglasses (Cool Swag Cat!)
-    const glassFrame = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.35, 0.15), materials.black);
-    glassFrame.position.set(0, 0.2, 0.62);
+    // Cute 3D Cap / Beanie on Head
+    const capGroup = new THREE.Group();
+    capGroup.position.set(0, 0.55, 0);
 
-    const lensGeo = new THREE.BoxGeometry(0.55, 0.25, 0.05);
-    const lensMaterial = new THREE.MeshStandardMaterial({ color: 0x1a1a2e, roughness: 0.1, metalness: 0.9 });
+    // Crown / dome of cap
+    const capDome = new THREE.Mesh(new THREE.SphereGeometry(0.72, 10, 10, 0, Math.PI * 2, 0, Math.PI / 2), materials.hoodie);
+    capDome.scale.set(1.02, 0.7, 1.02);
+    capGroup.add(capDome);
+
+    // Brim pointing backwards (Street Swag!)
+    const capBrim = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.05, 0.6), materials.hoodie);
+    capBrim.position.set(0, 0.05, -0.6);
+    capBrim.rotation.x = -0.15;
+    capGroup.add(capBrim);
+
+    // Cute Gold Badge/sticker on front crown
+    const capBadge = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 0.04, 8), materials.gold);
+    capBadge.position.set(0, 0.25, 0.52);
+    capBadge.rotation.x = Math.PI / 3;
+    capGroup.add(capBadge);
+
+    this.headGroup.add(capGroup);
+
+    // Thinner, Sleeker Sunglasses (sitting cute & low on the nose so glowing eyes peek over!)
+    const glassFrame = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.18, 0.08), materials.black);
+    glassFrame.position.set(0, -0.05, 0.68); // Slid slightly lower for the perfect peek!
+
+    const lensGeo = new THREE.BoxGeometry(0.48, 0.14, 0.04);
+    const lensMaterial = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.1, metalness: 0.95 });
     const leftLens = new THREE.Mesh(lensGeo, lensMaterial);
-    leftLens.position.set(-0.35, 0, 0.08);
+    leftLens.position.set(-0.3, 0, 0.04);
     const rightLens = leftLens.clone();
-    rightLens.position.x = 0.35;
+    rightLens.position.x = 0.3;
     glassFrame.add(leftLens, rightLens);
 
     // Glasses temples (arms)
-    const templeGeo = new THREE.BoxGeometry(0.08, 0.08, 0.8);
+    const templeGeo = new THREE.BoxGeometry(0.04, 0.04, 0.7);
     const leftTemple = new THREE.Mesh(templeGeo, materials.black);
-    leftTemple.position.set(-0.72, 0, -0.4);
+    leftTemple.position.set(-0.62, 0, -0.3);
     const rightTemple = leftTemple.clone();
-    rightTemple.position.x = 0.72;
+    rightTemple.position.x = 0.62;
     glassFrame.add(leftTemple, rightTemple);
 
     this.headGroup.add(glassFrame);
@@ -1337,7 +1534,7 @@ class SwagCat3D {
     // Gold Chain (Street Swag!)
     const chainGroup = new THREE.Group();
     chainGroup.position.set(0, 0.4, 0);
-    const linkGeo = new THREE.TorusGeometry(0.8, 0.1, 8, 16);
+    const linkGeo = new THREE.TorusGeometry(0.8, 0.08, 8, 16);
     const chain = new THREE.Mesh(linkGeo, materials.gold);
     chain.rotation.x = Math.PI / 2.3;
     chain.scale.set(1, 0.9, 1);
@@ -1691,123 +1888,170 @@ class RoamingPixelCat {
     // Audio context for 8-bit meows
     this.audioCtx = null;
 
-    // State machine
+    // State machine - baseline constrained
     this.x = 100;
-    this.y = window.innerHeight * 0.8;
+    this.y = window.innerHeight - 80;
     this.targetX = 100;
-    this.targetY = window.innerHeight * 0.8;
+    this.targetY = window.innerHeight - 80;
     this.speed = 2.5;
     this.facingLeft = false;
     this.state = 'idle'; // idle | walk | sleep | stretch | jump | active_run
     this.timer = 0;
     this.frameIndex = 0;
 
+    // Baseline tracking for lines of written letters
+    this.trackedElement = null;
+    this.baseXOffset = 0.5; // Walkable horizontal sub-offset (0 to 1)
+
     // Define pixel color maps and frame matrices
     this.initFrames();
-
     this.setupEvents();
+
+    // Find initial element line to sit on
+    this.findWalkableLine();
+    if (this.trackedElement) {
+      const r = this.trackedElement.getBoundingClientRect();
+      this.x = r.left + r.width * this.baseXOffset;
+      this.y = r.bottom - 48;
+    }
+
     this.animate();
   }
 
+  // Find a line of written text or straight element border in the viewport to walk on!
+  findWalkableLine() {
+    // Select written paragraphs, headers, section titles, navigation elements, borders, etc.
+    const candidates = document.querySelectorAll('p, h1, h2, h3, .section-title, .nav-links a, hr, .card, .btn, .benefit-card, .testimonial-card');
+    const visible = [];
+    const vh = window.innerHeight;
+    const vw = window.innerWidth;
+
+    candidates.forEach(el => {
+      const rect = el.getBoundingClientRect();
+      // Must have some text/size, and be clearly visible inside the viewport bounds
+      if (rect.top > 60 && rect.bottom < vh - 60 && rect.width > 40 && rect.left > 0 && rect.right < vw) {
+        visible.push(el);
+      }
+    });
+
+    if (visible.length > 0) {
+      // Choose a beautiful text line or horizontal divider in the viewport
+      this.trackedElement = visible[Math.floor(Math.random() * visible.length)];
+      this.baseXOffset = Math.random();
+    } else {
+      this.trackedElement = null;
+    }
+  }
+
   initFrames() {
+    // Beautiful, vibrant, super-cute 8-bit cat palette
     this.colors = {
       '.': 'transparent',
-      'o': '#FF6B00', // Orange
-      'd': '#B05018', // Shadow Orange
-      'w': '#E8B87A', // Peach/Cream
-      'p': '#FF8090', // Pink nose
-      'k': '#111111', // Black/Eyes
-      'g': '#FFD700', // Gold chain/collar
+      'o': '#FF8F3D', // Primary beautiful orange fur
+      'd': '#D35400', // Rich deep ginger shadow
+      'w': '#FFFDFB', // Soft cute white socks and muzzle
+      'p': '#FF94B4', // Adorable rosy pink blush & inner ears
+      'k': '#00F0A0', // Glowing high-contrast emerald eyes!
+      'g': '#FFD700', // Shiny gold swag collar/chain links
+      'b': '#1A1A22', // Sleek black backward snapback cap
+      'y': '#FFE600', // Sparkling stars/highlights
     };
 
+    // Highly polished cute pixel art matrices
     this.frames = {
       sit: [
-        "..oo......oo....",
-        ".oooo....oooo...",
-        "oowwwwoooowwww..",
-        "owkkwwppwwkkwo..",
-        "oowwwwwwwwwwdd..",
-        ".oodddggdddoo...",
-        "..ooodddddoo....",
-        "..ooodddddoo....",
-        "..ooodddddoo....",
-        "..ooodddddoo....",
-        "..ooodddddoo....",
-        "..oo.dddd.oo.o..",
-        ".ww..dddd..wwoo.",
-        "............oo.."
+        "................",
+        "....b......b....", // Snapback cap backward tips
+        "....bp....pb....", // Pink inner ears peeking
+        "....bboooobb....", // Curved cap crown
+        "...owkkwwkkwo...", // Adorable big emerald eyes
+        "...owwppwwpwo...", // Cute rosy pink blushing cheeks!
+        "....owwwwwwo....", // Pure soft white muzzle
+        ".....ooggoo.....", // Gold collar / chain
+        "....oooodooo....", // Cozy orange body
+        "....oooddooo....",
+        "....oooddooo....",
+        "....oooddooo....",
+        "....oow..woo....", // Soft white paws
+        "....ww....ww...."
       ],
       walk1: [
-        ".oo......oo.....",
-        "oooo....oooo....",
-        "owwwwoooowwww...",
-        "wkkwwppwwkkwoo..",
-        "owwwwwwwwwwdd...",
-        ".oodddggdddoo...",
-        "..oooddddddddd..",
-        "..ooodddddddddd.",
-        "..oooddddddddddd",
-        "..oooddddddddddd",
-        "..oo.dd.dd.dd.dd",
-        ".ww.ww.ww.ww..d."
+        "................",
+        "....b......b....",
+        "....bp....pb....",
+        "....bboooobb....",
+        "...owkkwwkkwo...",
+        "...owwppwwpwo...",
+        "....owwwwwwo....",
+        ".....ooggoo.....",
+        "....oooddooo....",
+        "...oooddddooo...", // Bouncing walk shape
+        "...ooddddddoo...",
+        "...o.ww..ww.o..."
       ],
       walk2: [
-        ".oo......oo.....",
-        "oooo....oooo....",
-        "owwwwoooowwww...",
-        "wkkwwppwwkkwoo..",
-        "owwwwwwwwwwdd...",
-        ".oodddggdddoo...",
-        "..oooddddddddd..",
-        "..ooodddddddddd.",
-        "..oooddddddddddd",
-        "..oooddddddddddd",
-        "..o.dd.dd.dd.dd.",
-        ".ww.ww..ww..ww.."
+        "................",
+        "....b......b....",
+        "....bp....pb....",
+        "....bboooobb....",
+        "...owkkwwkkwo...",
+        "...owwppwwpwo...",
+        "....owwwwwwo....",
+        ".....ooggoo.....",
+        "....oooddooo....",
+        "...oooddddooo...",
+        "...ooddddddoo...",
+        "...ww..ww..ww..."
       ],
       sleep: [
         "................",
         "................",
-        "......oo....oo..",
-        ".....oooo..oooo.",
-        "....owwwwoowwww.",
-        "....wkkwwppwwkko",
-        "...owwwwwwwwwwdd",
-        "...oodddggddddoo",
-        "...ddddddddddddd",
-        "....dddddddddd.."
+        "......b......b..",
+        "......bp....pb..",
+        "......bboooobb..",
+        ".....owkkwwkkwo.", // Closed eyes during sleep
+        "....owwppwwpwo..",
+        ".....ooggoooo...",
+        "....oooddooodd..",
+        ".....dddddddd..."
       ],
       stretch: [
         "................",
-        "....oo....oo....",
-        "...oooo..oooo...",
-        "..owwwwoowwww...",
-        "..wkkwwppwwkkwo.",
-        ".owwwwwwwwwwdd..",
-        ".oodddggdddoo...",
-        "..ooodddddoodd..",
-        "...oooddddooodd.",
-        "....oooddooddd..",
-        ".....ood.oddd...",
-        "....ww.ww.w....."
+        "....b......b....",
+        "....bp....pb....",
+        "....bboooobb....",
+        "...owkkwwkkwo...",
+        "...owwppwwpwo...",
+        "....owwwwwwo....",
+        ".....ooggoo.....",
+        "....oooddooo....",
+        ".....oooddooo...",
+        "......oooddooo..",
+        "......ww..ww...."
       ],
       jump: [
-        "...oo......oo...",
-        "..oooo....oooo..",
-        ".owwwwoooowwww..",
-        ".wkkwwppwwkkwo..",
-        "owwwwwwwwwwdd...",
-        "oodddggdddoo....",
-        ".ooodddddoo.....",
-        "..ooodddoo.d....",
-        "...ooddoo.dd....",
-        "..ww.ww..ww....."
+        "....b......b....",
+        "....bp....pb....",
+        "....bboooobb....",
+        "...owkkwwkkwo...",
+        "...owwppwwpwo...",
+        "....owwwwwwo....",
+        ".....ooggoo.....",
+        "....oooddooo....",
+        "...ww.ooddo.ww..",
+        "......oo.oo....."
       ]
     };
   }
 
   // Quick 8-bit synthetic meow sound
   playMeow() {
+    // Throttle / Debounce meows to avoid annoying sound spam!
+    if (this.lastMeowTime && Date.now() - this.lastMeowTime < 2200) {
+      return;
+    }
+    this.lastMeowTime = Date.now();
+
     try {
       if (!this.audioCtx) {
         this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -1824,18 +2068,17 @@ class RoamingPixelCat {
       gainNode.connect(this.audioCtx.destination);
 
       const now = this.audioCtx.currentTime;
-      // Frequency sweep for a realistic meow (frequency goes up then down)
       osc.frequency.setValueAtTime(450, now);
-      osc.frequency.exponentialRampToValueAtTime(880, now + 0.08);
-      osc.frequency.exponentialRampToValueAtTime(600, now + 0.35);
+      osc.frequency.exponentialRampToValueAtTime(920, now + 0.09);
+      osc.frequency.exponentialRampToValueAtTime(620, now + 0.35);
 
-      gainNode.gain.setValueAtTime(0.12, now);
-      gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.35);
+      gainNode.gain.setValueAtTime(0.08, now); // slightly softer volume
+      gainNode.gain.exponentialRampToValueAtTime(0.005, now + 0.35);
 
       osc.start(now);
       osc.stop(now + 0.35);
     } catch (err) {
-      console.log("Audio not allowed yet:", err);
+      console.log("Audio play throttled:", err);
     }
   }
 
@@ -1869,21 +2112,20 @@ class RoamingPixelCat {
   }
 
   setupEvents() {
-    // Hover event
+    // Hover event - trigger meow, display status, stretch playfully
     this.container.addEventListener('mouseenter', () => {
       this.playMeow();
       const reacts = ['❤️', '⚡', 'GG!', 'SwaG!', 'Meow!'];
       const r = reacts[Math.floor(Math.random() * reacts.length)];
       this.showMessage(r);
 
-      // Perform a stretch or look at cursor
       if (this.state !== 'active_run') {
         this.state = 'stretch';
         this.timer = 30;
       }
     });
 
-    // Click event (jump high or dash away)
+    // Click event - high jump or fast dash along the active line!
     this.container.addEventListener('click', (e) => {
       e.stopPropagation();
       this.playMeow();
@@ -1891,22 +2133,21 @@ class RoamingPixelCat {
 
       const rand = Math.random();
       if (rand < 0.5) {
-        // High jump!
+        // Super high leap
         this.state = 'jump';
-        this.speed = 7;
+        this.speed = 8;
         this.targetY = this.y - 180;
         this.timer = 50;
       } else {
-        // Rapid dash run
+        // High-speed run along the active baseline
         this.state = 'active_run';
         this.speed = 10;
-        const runs = [window.innerWidth * 0.1, window.innerWidth * 0.8, window.innerWidth * 0.4];
-        this.targetX = runs[Math.floor(Math.random() * runs.length)];
+        this.baseXOffset = Math.random() < 0.5 ? 0.1 : 0.9;
         this.timer = 60;
       }
     });
 
-    // React slightly on window scrolling
+    // Detect scrolling and wake up to walk along scrolllines
     let scrollTimeout;
     window.addEventListener('scroll', () => {
       if (this.state === 'sleep' || this.state === 'idle') {
@@ -1933,14 +2174,12 @@ class RoamingPixelCat {
       if (rand < 0.3) {
         this.state = 'idle';
         this.timer = Math.floor(Math.random() * 80) + 40;
-      } else if (rand < 0.6) {
+      } else if (rand < 0.7) {
         this.state = 'walk';
-        this.speed = 2.0;
-        this.targetX = Math.random() * (window.innerWidth - 100) + 50;
-        // Float around screen height (80% viewport)
-        this.targetY = window.innerHeight * 0.82 + Math.sin(Date.now() * 0.001) * 30;
+        this.speed = 2.4;
+        this.findWalkableLine(); // Scout for a beautiful new line of written letters
         this.timer = Math.floor(Math.random() * 120) + 60;
-      } else if (rand < 0.8) {
+      } else if (rand < 0.85) {
         this.state = 'sleep';
         this.timer = Math.floor(Math.random() * 200) + 100;
       } else {
@@ -1949,28 +2188,50 @@ class RoamingPixelCat {
       }
     }
 
-    // State machine logic
+    // Default fallback line at screen bottom
+    const straightLineY = window.innerHeight - 80;
+
+    // Follow the tracked element baseline perfectly in real-time
+    if (this.trackedElement) {
+      const rect = this.trackedElement.getBoundingClientRect();
+      // If the tracked text line has scrolled fully off-screen, find a new visible line
+      if (rect.bottom < 40 || rect.top > window.innerHeight - 40) {
+        this.findWalkableLine();
+      } else {
+        // Sit exactly on top of the text baseline
+        this.targetY = rect.bottom - 48;
+        this.targetX = rect.left + this.baseXOffset * rect.width;
+      }
+    } else {
+      this.targetY = straightLineY;
+    }
+
     let frameToRender = 'sit';
 
     if (this.state === 'idle') {
       frameToRender = 'sit';
+      // Smoothly stick to baseline
+      this.x += (this.targetX - this.x) * 0.15;
+      this.y += (this.targetY - this.y) * 0.15;
     } else if (this.state === 'sleep') {
       frameToRender = 'sleep';
+      this.x += (this.targetX - this.x) * 0.15;
+      this.y += (this.targetY - this.y) * 0.15;
     } else if (this.state === 'stretch') {
       frameToRender = 'stretch';
+      this.x += (this.targetX - this.x) * 0.15;
+      this.y += (this.targetY - this.y) * 0.15;
     } else if (this.state === 'jump') {
       frameToRender = 'jump';
-      // Jump vertical physics simulation
       this.y += (this.targetY - this.y) * 0.15;
-      if (Math.abs(this.y - this.targetY) < 10) {
-        this.targetY = window.innerHeight * 0.82; // come back down
+      if (Math.abs(this.y - this.targetY) < 12) {
+        this.findWalkableLine(); // Land perfectly on a new line!
       }
     } else if (this.state === 'walk' || this.state === 'active_run') {
-      // Walk animation frames toggle
       this.frameIndex++;
       frameToRender = (Math.floor(this.frameIndex / 8) % 2 === 0) ? 'walk1' : 'walk2';
 
-      // Move toward target position
+      // Move horizontally and vertically toward the baseline targets
       const dx = this.targetX - this.x;
       const dy = this.targetY - this.y;
       const dist = Math.sqrt(dx * dx + dy * dy);
@@ -1983,14 +2244,22 @@ class RoamingPixelCat {
         if (this.state === 'active_run') {
           this.state = 'idle';
           this.timer = 40;
+        } else {
+          // Wander to a different part of the same text line
+          if (Math.random() < 0.4) {
+            this.baseXOffset = Math.random();
+          } else {
+            this.state = 'idle';
+            this.timer = Math.floor(Math.random() * 60) + 30;
+          }
         }
       }
     }
 
-    // Render frame
+    // Render SVG
     this.renderFrame(frameToRender);
 
-    // Apply CSS positioning and horizontal flip (scaleX)
+    // Apply viewport positions and scale flips
     this.container.style.left = `${this.x}px`;
     this.container.style.top = `${this.y}px`;
     const flip = this.facingLeft ? 'scaleX(-1)' : 'scaleX(1)';
