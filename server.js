@@ -20,13 +20,13 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 
+const { ASSETS_DIR } = require('./lib/paths');
 const store = require('./lib/store');
 const auth = require('./lib/auth');
 const xlsx = require('./lib/xlsx');
 
 const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, 'public');
-const ASSETS_DIR = path.join(ROOT, 'assets');
 const PORT = Number(process.env.PORT || 3000);
 const HOST = process.env.HOST || '0.0.0.0';
 const TZ = process.env.TZ_NAME || 'Asia/Kolkata';
@@ -259,6 +259,42 @@ const routes = {
       bookings: store.listBookings({ limit: 500 }),
       stats: buildStats()
     });
+  },
+
+  'POST /api/admin/layout': async (req, res) => {
+    if (!adminFrom(req, res)) return sendJSON(res, 401, { error: 'Not signed in.' });
+    const body = await readBody(req);
+    const result = store.updateLayout({ seats: body.seats, layout: body.layout });
+    if (result.error) return sendJSON(res, 400, { error: result.error });
+    broadcast('state', store.getPublicState());
+    sendJSON(res, 200, { ok: true, seats: result.seats, layout: result.layout });
+  },
+
+  'POST /api/admin/layout-image': async (req, res) => {
+    if (!adminFrom(req, res)) return sendJSON(res, 401, { error: 'Not signed in.' });
+    const body = await readBody(req, 16 * 1024 * 1024);
+    const name = String(body.name || 'floor-plan').toLowerCase().replace(/[^a-z0-9._-]/g, '-').replace(/-+/g, '-');
+    const dataUrl = String(body.data || '');
+    const match = dataUrl.match(/^data:image\/(png|jpe?g|webp|gif|svg\+xml);base64,([A-Za-z0-9+/=]+)$/);
+    if (!match) return sendJSON(res, 400, { error: 'That file is not a supported image (PNG, JPG, WEBP or SVG).' });
+
+    const buf = Buffer.from(match[2], 'base64');
+    if (buf.length > 8 * 1024 * 1024) return sendJSON(res, 400, { error: 'Image is larger than 8 MB.' });
+    if (buf.length < 32) return sendJSON(res, 400, { error: 'That image looks empty.' });
+
+    const ext = match[1] === 'jpeg' ? 'jpg' : match[1] === 'svg+xml' ? 'svg' : match[1];
+    const file = `store-layout-${Date.now().toString(36)}.${ext}`;
+    fs.writeFileSync(path.join(ASSETS_DIR, file), buf);
+
+    const width = Number(body.width) || store.state.layout.width;
+    const height = Number(body.height) || store.state.layout.height;
+    const result = store.updateLayout({
+      seats: store.state.seats,
+      layout: { image: 'assets/' + file, width, height }
+    });
+    if (result.error) return sendJSON(res, 400, { error: result.error });
+    broadcast('state', store.getPublicState());
+    sendJSON(res, 200, { ok: true, image: result.layout.image, layout: result.layout });
   },
 
   'GET /api/admin/history': async (req, res) => {

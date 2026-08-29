@@ -71,7 +71,11 @@
     <section class="card">
       <div class="card-head">
         <h2>LIVE FLOOR</h2>
-        <div class="hint" id="mapHint">Green = free · Red = booked · Click a station to manage it</div>
+        <div class="toolbar">
+          <span class="hint" id="mapHint">Green = free · Red = booked · Click a station to manage it</span>
+          <button class="tb-btn" id="uploadImgBtn" type="button">Upload floor photo</button>
+          <button class="tb-btn" id="editLayoutBtn" type="button">Move / resize stations</button>
+        </div>
       </div>
       <div class="card-body">
         <div class="map-shell" id="adminMap">
@@ -82,8 +86,67 @@
           <span><i class="sw-busy"></i> Booked (timer = time left)</span>
           <span><i class="sw-sel"></i> Selected</span>
         </div>
+
+        <!-- ------------- LAYOUT EDITOR ------------- -->
+        <div id="layoutEditor" style="display:none;">
+          <div class="editor-bar">
+            <div class="field">
+              <label for="seatSelect">Station</label>
+              <select class="sel" id="seatSelect"></select>
+            </div>
+            <div class="field">
+              <label for="edLabel">Name on map</label>
+              <input class="inp" id="edLabel" type="text" maxlength="24">
+            </div>
+            <div class="field">
+              <label for="edZone">Zone</label>
+              <input class="inp" id="edZone" type="text" maxlength="40">
+            </div>
+            <div class="field">
+              <label for="edType">Type</label>
+              <select class="sel" id="edType">
+                <option value="ps5">PlayStation</option>
+                <option value="pc">PC</option>
+                <option value="racing">Racing</option>
+                <option value="retro">Retro</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+            <div class="field">
+              <button class="btn-primary" id="addSeatBtn" type="button">+ Add</button>
+            </div>
+            <div class="field">
+              <button class="btn-cancel" id="delSeatBtn" type="button">Delete</button>
+            </div>
+          </div>
+
+          <div class="editor-bar" style="border-top:1px dashed #2a2a2a;padding-top:14px;">
+            <div class="field">
+              <label for="gridRows">Rows</label>
+              <input class="inp" id="gridRows" type="number" min="1" max="20" value="3" style="width:74px;">
+            </div>
+            <div class="field">
+              <label for="gridCols">Columns</label>
+              <input class="inp" id="gridCols" type="number" min="1" max="20" value="4" style="width:74px;">
+            </div>
+            <div class="field">
+              <button class="btn-cancel" id="gridBtn" type="button">Arrange as grid</button>
+            </div>
+            <div class="field" style="flex:1;">
+              <span class="hint" id="editorHint">Drag a station to move it · drag its bottom-right corner to resize</span>
+            </div>
+            <div class="field">
+              <button class="btn-primary" id="saveLayoutBtn" type="button" style="background:var(--green);color:#04160a;">SAVE LAYOUT</button>
+            </div>
+            <div class="field">
+              <button class="btn-cancel" id="cancelLayoutBtn" type="button">CANCEL</button>
+            </div>
+          </div>
+        </div>
       </div>
     </section>
+
+    <input type="file" id="imageInput" accept="image/png,image/jpeg,image/webp,image/svg+xml" style="display:none;">
 
     <div class="grid-2">
       <!-- ---------------------- ACTIVE SESSIONS ---------------------- -->

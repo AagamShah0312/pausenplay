@@ -57,6 +57,8 @@ The password is stored as a salted scrypt hash in `data/auth.json` — never in 
   time adjustment. Search by name, phone or station and filter running/finished.
 * **Excel export**: `⬇ EXPORT EXCEL` downloads a real `.xlsx` ("Bookings" sheet + a
   "Station summary" sheet with sessions/hours per station). A `CSV` button is there too.
+* **Floor plan editor**: upload a photo of the store, then drag the stations onto it, resize them,
+  rename them, add/remove them, or auto-arrange a grid — saved straight to the server.
 * **Settings** to change the admin username and password.
 * Quick stats: stations in play, free stations, bookings today, hours played today,
   all-time bookings, unique players.
@@ -65,30 +67,39 @@ The password is stored as a salted scrypt hash in `data/auth.json` — never in 
 
 ## Using your own store photo / layout
 
-The floor plan is just an image with stations positioned on top of it in **percentages**, so you
-can drop in a photo of your actual store:
+**Fastest way — no file editing at all:**
 
-1. Put the picture in `assets/` (e.g. `assets/my-store.jpg`).
-2. Stop the server, open `data/state.json` (it is created on first run) and edit:
+1. Go to `/admin` → **Upload floor photo** and pick your picture (PNG / JPG / WEBP, up to 8 MB).
+   It is saved to `assets/` and becomes the map immediately.
+2. Click **Move / resize stations**, then **drag each station onto its spot** and drag its
+   bottom-right corner to resize. Use **+ Add** / **Delete** for stations and the
+   **Rows / Columns → Arrange as grid** helper for a quick starting layout.
+3. Rename a station or its zone in the fields at the bottom, then **Save layout**.
+   Players see the new map instantly.
+
+Stations are stored as **percentages of the image**, so the map stays correct on any screen size.
+
+If you prefer to edit the file by hand, stop the server and open `data/state.json`:
 
 ```jsonc
 {
   "layout": { "image": "assets/my-store.jpg", "width": 1600, "height": 900 },
   "seats": [
     { "id": "PS5-01", "label": "PS5-01", "zone": "PlayStation 5 Zone",
-      "type": "ps5", "x": 7, "y": 17, "w": 17, "h": 15 },
-    ...
+      "type": "ps5", "x": 7, "y": 17, "w": 17, "h": 15 }
   ]
 }
 ```
 
-* `x / y / w / h` are percentages of the image (0–100), measured from the top-left corner —
+* `x / y / w / h` are percentages (0–100) measured from the top-left corner of the image —
   so `x:7, y:17, w:17, h:15` = a box starting 7% from the left, 17% from the top,
   17% wide and 15% tall.
-* Add or remove stations freely; give each a unique `id`.
-* `durations` in the same file controls the time options offered to players
-  (`[30, 60, 90, 120, 180]` minutes by default) and `defaultDuration` the pre-selected one.
+* Add or remove stations freely; each needs a unique `id`.
+* `type` is one of `ps5`, `pc`, `racing`, `retro`, `other`.
+* `durations` controls the time options offered to players (`[30, 60, 90, 120, 180]` minutes by
+  default) and `defaultDuration` the pre-selected one.
 
+A station that is currently in use can not be deleted — end its session first.
 The default plan is a vector floor map (`assets/store-layout.svg`) drawn to match the included
 station coordinates, so it stays sharp on any screen.
 
@@ -142,6 +153,19 @@ data/                  live data (auto-created, git-ignored)
 | GET | `/api/export.csv` | admin | CSV export |
 
 ---
+
+## Build & tests
+
+```bash
+npm run build   # verifies every file, parses all JS, checks the layout data and the xlsx writer
+npm test        # 32 integration tests against a real server instance
+npm run check   # build + tests
+```
+
+The tests boot `server.js` on a random port with a temporary data directory, so they never touch
+your real bookings. They cover the public booking rules, admin auth (including the credential
+change flow), time add/remove/end, history, the Excel/CSV export (byte-level zip validation),
+live SSE updates, layout editing and image uploads.
 
 ## Deploying
 

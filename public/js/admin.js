@@ -148,7 +148,10 @@
         node.type = 'button';
         node.className = 'seat';
         node.innerHTML = '<span class="seat-name"></span><span class="seat-meta"></span><span class="seat-who"></span><span class="seat-bar" style="display:none"><i></i></span>';
-        node.addEventListener('click', function () { openSeatModal(seat.id); });
+        node.addEventListener('click', function () {
+        if (editing) { selectDraftSeat(seat.id); return; }
+        openSeatModal(seat.id);
+      });
         map.appendChild(node);
         seatEls[seat.id] = node;
       }
@@ -370,6 +373,253 @@
     }).catch(function () {});
   }
 
+
+  /* ================= LAYOUT EDITOR (move / resize stations) ================= */
+  var editing = false;
+  var draftSeats = [];
+  var editingSeatId = null;
+
+  function cloneSeats(list) {
+    return (list || []).map(function (s) {
+      return { id: s.id, label: s.label, zone: s.zone, type: s.type, x: s.x, y: s.y, w: s.w, h: s.h };
+    });
+  }
+
+  function draftSeat(id) {
+    return draftSeats.filter(function (s) { return s.id === id; })[0] || null;
+  }
+
+  function currentSeatId() { return editing ? editingSeatId : selectedSeat; }
+
+  function enterEditMode() {
+    if (!state) return;
+    editing = true;
+    draftSeats = cloneSeats(state.seats);
+    editingSeatId = (draftSeats[0] || {}).id || null;
+    $('layoutEditor').style.display = 'block';
+    $('adminMap').classList.add('editing');
+    $('editLayoutBtn').textContent = 'Editing stations…';
+    $('mapHint').textContent = 'Drag a station to move it · drag its bottom-right corner to resize';
+    $('mapHint').classList.add('map-hint-on');
+    renderEditMap();
+    renderSeatSelect();
+    syncEditorFields();
+  }
+
+  function exitEditMode() {
+    editing = false;
+    draftSeats = [];
+    editingSeatId = null;
+    $('layoutEditor').style.display = 'none';
+    $('adminMap').classList.remove('editing');
+    $('editLayoutBtn').textContent = 'Move / resize stations';
+    $('mapHint').textContent = 'Green = free · Red = booked · Click a station to manage it';
+    $('mapHint').classList.remove('map-hint-on');
+    Object.keys(seatEls).forEach(function (k) { seatEls[k].remove(); delete seatEls[k]; });
+    selectedSeat = null;
+    loadState();
+  }
+
+  function renderEditMap() {
+    var map = $('adminMap');
+    Object.keys(seatEls).forEach(function (k) { seatEls[k].remove(); delete seatEls[k]; });
+    draftSeats.forEach(function (seat) {
+      var node = document.createElement('div');
+      node.className = 'seat free editing';
+      node.dataset.seat = seat.id;
+      node.innerHTML = '<span class="seat-name"></span><span class="seat-who"></span><span class="seat-bar" style="display:none"><i></i></span>';
+      positionNode(node, seat);
+      node.querySelector('.seat-name').textContent = seat.label;
+      node.querySelector('.seat-who').textContent = seat.zone;
+      map.appendChild(node);
+      seatEls[seat.id] = node;
+      attachDrag(node, seat);
+    });
+    markEditingSelection();
+  }
+
+  function positionNode(node, seat) {
+    node.style.left = seat.x + '%';
+    node.style.top = seat.y + '%';
+    node.style.width = seat.w + '%';
+    node.style.height = seat.h + '%';
+  }
+
+  function markEditingSelection() {
+    Object.keys(seatEls).forEach(function (id) {
+      seatEls[id].classList.toggle('picked', id === editingSeatId);
+    });
+  }
+
+  function attachDrag(node, seat) {
+    node.addEventListener('pointerdown', function (e) {
+      if (!editing) return;
+      e.preventDefault();
+      selectDraftSeat(seat.id);
+      var map = $('adminMap');
+      var mapRect = map.getBoundingClientRect();
+      var nodeRect = node.getBoundingClientRect();
+      var isResize = (e.clientX - nodeRect.right > -18) && (e.clientY - nodeRect.bottom > -18);
+      var startX = e.clientX, startY = e.clientY;
+      var orig = { x: seat.x, y: seat.y, w: seat.w, h: seat.h };
+      node.classList.add('picked');
+      try { node.setPointerCapture(e.pointerId); } catch (err) { /* older browsers */ }
+
+      function move(ev) {
+        var dxPct = ((ev.clientX - startX) / mapRect.width) * 100;
+        var dyPct = ((ev.clientY - startY) / mapRect.height) * 100;
+        if (isResize) {
+          seat.w = clamp(orig.w + dxPct, 3, 100 - seat.x);
+          seat.h = clamp(orig.h + dyPct, 3, 100 - seat.y);
+        } else {
+          seat.x = clamp(orig.x + dxPct, 0, 100 - seat.w);
+          seat.y = clamp(orig.y + dyPct, 0, 100 - seat.h);
+        }
+        positionNode(node, seat);
+      }
+      function up() {
+        node.classList.remove('picked');
+        node.removeEventListener('pointermove', move);
+        node.removeEventListener('pointerup', up);
+        node.removeEventListener('pointercancel', up);
+      }
+      node.addEventListener('pointermove', move);
+      node.addEventListener('pointerup', up);
+      node.addEventListener('pointercancel', up);
+    });
+  }
+
+  function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, Math.round(v * 100) / 100)); }
+
+  function selectDraftSeat(id) {
+    editingSeatId = id;
+    markEditingSelection();
+    syncEditorFields();
+  }
+
+  function renderSeatSelect() {
+    var sel = $('seatSelect');
+    sel.innerHTML = draftSeats.map(function (s) {
+      return '<option value="' + esc(s.id) + '">' + esc(s.label) + '</option>';
+    }).join('');
+    if (editingSeatId) sel.value = editingSeatId;
+  }
+
+  function syncEditorFields() {
+    var seat = draftSeat(editingSeatId);
+    if (!seat) return;
+    $('edLabel').value = seat.label;
+    $('edZone').value = seat.zone;
+    $('edType').value = seat.type;
+  }
+
+  function addDraftSeat() {
+    var n = draftSeats.length + 1;
+    var id = 'SEAT-' + String(n).padStart(2, '0');
+    var k = 1;
+    while (draftSeats.some(function (s) { return s.id === id; })) id = 'SEAT-' + String(n + (++k)).padStart(2, '0');
+    var last = draftSeats[draftSeats.length - 1];
+    draftSeats.push({
+      id: id, label: id, zone: last ? last.zone : 'Gaming Zone', type: last ? last.type : 'other',
+      x: last ? Math.min(80, last.x + 6) : 6, y: last ? Math.min(80, last.y + 6) : 6, w: 12, h: 14
+    });
+    editingSeatId = id;
+    renderEditMap();
+    renderSeatSelect();
+    syncEditorFields();
+  }
+
+  function deleteDraftSeat() {
+    var seat = draftSeat(editingSeatId);
+    if (!seat) return;
+    var live = state.seats.filter(function (s) { return s.id === seat.id && s.status === 'busy'; })[0];
+    if (live) { toast(seat.label + ' is in use right now — end the session first.', 'err'); return; }
+    if (!confirm('Remove station ' + seat.label + '?')) return;
+    draftSeats = draftSeats.filter(function (s) { return s.id !== seat.id; });
+    editingSeatId = (draftSeats[0] || {}).id || null;
+    renderEditMap();
+    renderSeatSelect();
+    syncEditorFields();
+  }
+
+  function arrangeGrid() {
+    var rows = Math.max(1, Math.min(20, Number($('gridRows').value) || 1));
+    var cols = Math.max(1, Math.min(20, Number($('gridCols').value) || 1));
+    var margin = 4, gap = 2;
+    var w = (100 - margin * 2 - gap * (cols - 1)) / cols;
+    var h = (100 - margin * 2 - gap * (rows - 1)) / rows;
+    var next = [];
+    for (var r = 0; r < rows; r++) {
+      for (var c = 0; c < cols; c++) {
+        var existing = draftSeats[next.length];
+        next.push({
+          id: existing ? existing.id : 'SEAT-' + String(next.length + 1).padStart(2, '0'),
+          label: existing ? existing.label : 'SEAT-' + String(next.length + 1).padStart(2, '0'),
+          zone: existing ? existing.zone : 'Gaming Zone',
+          type: existing ? existing.type : 'other',
+          x: Math.round((margin + c * (w + gap)) * 100) / 100,
+          y: Math.round((margin + r * (h + gap)) * 100) / 100,
+          w: Math.round(w * 100) / 100,
+          h: Math.round(h * 100) / 100
+        });
+      }
+    }
+    draftSeats = next;
+    editingSeatId = (draftSeats[0] || {}).id || null;
+    renderEditMap();
+    renderSeatSelect();
+    syncEditorFields();
+    toast('Arranged ' + (rows * cols) + ' stations in a grid — drag them onto the right spots, then save.', 'ok');
+  }
+
+  function saveLayout() {
+    if (!draftSeats.length) { toast('The floor plan needs at least one station.', 'err'); return; }
+    var btn = $('saveLayoutBtn');
+    btn.disabled = true;
+    api('/api/admin/layout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ seats: draftSeats, layout: { image: state.layout.image, width: state.layout.width, height: state.layout.height } })
+    }).then(function (res) {
+      btn.disabled = false;
+      if (!res.ok) { toast(res.data.error || 'Could not save the layout.', 'err'); return; }
+      toast('Layout saved.', 'ok');
+      exitEditMode();
+    }).catch(function () { btn.disabled = false; });
+  }
+
+  function uploadFloorImage(file) {
+    if (!file) return;
+    if (file.size > 8 * 1024 * 1024) { toast('That image is bigger than 8 MB.', 'err'); return; }
+    var reader = new FileReader();
+    reader.onload = function () {
+      var dataUrl = String(reader.result);
+      var probe = new Image();
+      probe.onload = function () {
+        $('uploadImgBtn').disabled = true;
+        $('uploadImgBtn').textContent = 'Uploading…';
+        api('/api/admin/layout-image', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: file.name, data: dataUrl, width: probe.naturalWidth, height: probe.naturalHeight })
+        }).then(function (res) {
+          $('uploadImgBtn').disabled = false;
+          $('uploadImgBtn').textContent = 'Upload floor photo';
+          if (!res.ok) { toast(res.data.error || 'Upload failed.', 'err'); return; }
+          toast('Floor photo updated — now drag the stations onto it.', 'ok');
+          loadState();
+        }).catch(function () {
+          $('uploadImgBtn').disabled = false;
+          $('uploadImgBtn').textContent = 'Upload floor photo';
+        });
+      };
+      probe.onerror = function () { toast('Could not read that image.', 'err'); };
+      probe.src = dataUrl;
+    };
+    reader.onerror = function () { toast('Could not read that file.', 'err'); };
+    reader.readAsDataURL(file);
+  }
+
   /* ----------------------------- export ---------------------------- */
   function download(path, filename) {
     fetch(path, { credentials: 'same-origin' })
@@ -400,7 +650,7 @@
       offset = state.serverTime - Date.now();
       applyLayout();
       renderStats();
-      renderMap();
+      if (!editing) renderMap();
       renderActive();
       renderHistory();
       renderSelects();
@@ -509,6 +759,43 @@
         loadState();
       }).catch(function () { mbtn.disabled = false; });
     });
+
+    // floor plan editor
+    $('editLayoutBtn').addEventListener('click', function () {
+      if (editing) { exitEditMode(); } else { enterEditMode(); }
+    });
+    $('uploadImgBtn').addEventListener('click', function () { $('imageInput').click(); });
+    $('imageInput').addEventListener('change', function (e) {
+      var f = e.target.files && e.target.files[0];
+      if (f) uploadFloorImage(f);
+      e.target.value = '';
+    });
+    $('seatSelect').addEventListener('change', function (e) { selectDraftSeat(e.target.value); });
+    $('edLabel').addEventListener('input', function (e) {
+      var seat = draftSeat(editingSeatId);
+      if (!seat) return;
+      seat.label = e.target.value.slice(0, 24) || seat.id;
+      var node = seatEls[seat.id];
+      if (node) node.querySelector('.seat-name').textContent = seat.label;
+      var opt = $('seatSelect').querySelector('option[value="' + seat.id + '"]');
+      if (opt) opt.textContent = seat.label;
+    });
+    $('edZone').addEventListener('input', function (e) {
+      var seat = draftSeat(editingSeatId);
+      if (!seat) return;
+      seat.zone = e.target.value.slice(0, 40);
+      var node = seatEls[seat.id];
+      if (node) node.querySelector('.seat-who').textContent = seat.zone;
+    });
+    $('edType').addEventListener('change', function (e) {
+      var seat = draftSeat(editingSeatId);
+      if (seat) seat.type = e.target.value;
+    });
+    $('addSeatBtn').addEventListener('click', addDraftSeat);
+    $('delSeatBtn').addEventListener('click', deleteDraftSeat);
+    $('gridBtn').addEventListener('click', arrangeGrid);
+    $('saveLayoutBtn').addEventListener('click', saveLayout);
+    $('cancelLayoutBtn').addEventListener('click', exitEditMode);
 
     // history filters
     $('searchInput').addEventListener('input', applyHistoryFilter);
