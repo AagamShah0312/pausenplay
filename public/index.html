@@ -231,6 +231,7 @@ footer { background:#000; padding:30px 80px; display:flex; align-items:center; j
   footer{flex-direction:column;gap:12px;text-align:center;padding:24px;}
 }
 </style>
+<link rel="stylesheet" href="css/booking.css">
 </head>
 <body>
 
@@ -268,6 +269,7 @@ footer { background:#000; padding:30px 80px; display:flex; align-items:center; j
     <ul class="nav-links">
       <li><a href="#about">About</a></li>
       <li><a href="#games">Games</a></li>
+      <li><a href="#book">Book a Seat</a></li>
       <li><a href="#testimonials">Community</a></li>
       <li><a href="#contact">Contact</a></li>
     </ul>
@@ -287,7 +289,7 @@ footer { background:#000; padding:30px 80px; display:flex; align-items:center; j
       </h1>
       <p class="hero-desc">Where every game is an adventure and every player is family. Step into the arena — the Swag Cat is waiting.</p>
       <a href="#games" class="btn-primary">EXPLORE GAMES</a>
-      <a href="#contact" class="btn-outline">VISIT US</a>
+      <a href="#book" class="btn-outline">BOOK A SEAT</a>
     </div>
     <div class="hero-image">
       <div class="hero-cat-wrap">
@@ -402,6 +404,96 @@ footer { background:#000; padding:30px 80px; display:flex; align-items:center; j
     </div>
   </section>
 
+  <!-- BOOK A SEAT -->
+  <section id="book">
+    <div class="reveal" style="display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:20px;">
+      <div>
+        <div class="section-tag">Live Floor Status</div>
+        <h2><span class="glitch g2" data-text="GRAB YOUR">GRAB YOUR</span><br><span class="glitch accent" data-text="STATION">STATION</span></h2>
+      </div>
+      <p style="color:var(--muted);font-size:13px;max-width:340px;line-height:1.8;">Green stations are free, red ones are in play &mdash; the timer shows exactly when they open up. Tap a station, drop your details and you are in.</p>
+    </div>
+
+    <div class="book-wrap reveal">
+      <!-- ---------- FLOOR MAP ---------- -->
+      <div class="map-col">
+        <div class="map-head">
+          <div class="map-title">STORE FLOOR MAP</div>
+          <div class="legend">
+            <span><i class="sw-free"></i> Free</span>
+            <span><i class="sw-busy"></i> Booked</span>
+            <span><i class="sw-sel"></i> Your pick</span>
+          </div>
+          <div class="live-pill"><span class="live-dot offline" id="liveDot"></span><span id="liveLabel">CONNECTING&hellip;</span></div>
+        </div>
+
+        <div class="store-map" id="storeMap">
+          <img src="assets/store-layout.svg" alt="PausenPlay store floor plan">
+          <div class="map-loading" id="mapLoading">Loading live floor status&hellip;</div>
+        </div>
+
+        <div class="live-pill" style="margin-top:14px;" id="freeCount">Loading stations&hellip;</div>
+      </div>
+
+      <!-- ---------- BOOKING FORM ---------- -->
+      <div class="book-panel">
+        <form id="bookForm" novalidate>
+          <h3>BOOK THIS STATION</h3>
+          <div class="sub">Walk-in booking &middot; pay at the counter</div>
+
+          <div class="picked empty">
+            <div>
+              <div class="pl">Selected station</div>
+              <div class="pv" id="pickedSeat">No station picked</div>
+            </div>
+            <div style="text-align:right;">
+              <div class="pl">Zone</div>
+              <div class="pv" id="pickedZone" style="font-size:15px;color:var(--white);">&mdash;</div>
+            </div>
+          </div>
+
+          <div class="field">
+            <label for="playerName">Player name</label>
+            <input id="playerName" name="name" type="text" maxlength="40" placeholder="e.g. Rahul Shah" autocomplete="name">
+          </div>
+
+          <div class="field">
+            <label for="playerPhone">Phone number</label>
+            <input id="playerPhone" name="phone" type="tel" maxlength="13" placeholder="10 digit mobile number" autocomplete="tel">
+          </div>
+
+          <div class="field">
+            <label>How long do you want to play?</label>
+            <div class="durations" id="durations"></div>
+          </div>
+
+          <div class="summary">
+            Session window: <b id="summaryStart">&mdash;</b><br>
+            Duration: <b id="summaryDuration">&mdash;</b>
+          </div>
+
+          <button class="btn-book" id="bookSubmit" type="submit">LOCK IN MY SEAT</button>
+          <div class="form-note">Your station is held the moment you book. The countdown on the map runs live &mdash; the counter can add more time to it whenever you want.</div>
+        </form>
+
+        <!-- ---------- CONFIRMATION ---------- -->
+        <div class="done-card" id="bookDone" style="display:none;">
+          <div class="tick">&#10003;</div>
+          <h3>YOU ARE IN</h3>
+          <div class="sub">Show this at the counter and start playing</div>
+          <div class="done-rows">
+            <div class="done-row"><span>Station</span><b class="big" id="doneSeat">&mdash;</b></div>
+            <div class="done-row"><span>Zone</span><b id="doneZone">&mdash;</b></div>
+            <div class="done-row"><span>Player</span><b id="doneName">&mdash;</b></div>
+            <div class="done-row"><span>Until</span><b id="doneUntil">&mdash;</b></div>
+            <div class="done-row"><span>Duration</span><b id="doneDuration">&mdash;</b></div>
+          </div>
+          <button class="btn-ghost" id="bookAgain" type="button">BOOK ANOTHER STATION</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <!-- TESTIMONIALS -->
   <section id="testimonials">
     <div class="reveal">
@@ -433,10 +525,24 @@ footer { background:#000; padding:30px 80px; display:flex; align-items:center; j
 
   <footer>
     <div class="footer-logo">PAUSEN<span>PLAY</span></div>
-    <div class="footer-copy">STAY SWAG, STAY PLAY. © 2025 PAUSENPLAY. ALL RIGHTS RESERVED.</div>
+    <div class="footer-copy">STAY SWAG, STAY PLAY. © 2025 PAUSENPLAY. ALL RIGHTS RESERVED.<br><a class="admin-link" href="/admin">Staff login &rarr;</a></div>
   </footer>
 
 </div><!-- end main-site -->
+
+<!-- ======================== MY SESSION / TOASTS ======================== -->
+<div id="mySession">
+  <div>
+    <div class="ms-label">Your session is running</div>
+    <div class="ms-seat" id="msSeat">&mdash;</div>
+    <div class="ms-meta" id="msName">&mdash;</div>
+  </div>
+  <div style="text-align:right;">
+    <div class="ms-label">Time left</div>
+    <div class="ms-time" id="msTime">00:00</div>
+  </div>
+</div>
+<div class="pp-toast" id="ppToast"></div>
 
 <script>
 // ==========================================
@@ -1049,5 +1155,6 @@ document.querySelectorAll('a[href^="#"]').forEach(a => {
 document.body.style.overflow = 'hidden';
 window.addEventListener('load', () => requestAnimationFrame(animIntro));
 </script>
+<script src="js/booking.js" defer></script>
 </body>
 </html>

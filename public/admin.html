@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PausenPlay — Admin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Mono:wght@400;700&family=Barlow+Condensed:wght@400;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/admin.css">
+</head>
+<body>
+
+<!-- ============================== LOGIN ============================== -->
+<div class="login-wrap" id="loginView">
+  <div class="login-card">
+    <div class="login-logo">PAUSEN<span>PLAY</span></div>
+    <div class="login-sub">Staff / Admin Login</div>
+
+    <div class="login-error" id="loginError"></div>
+
+    <form id="loginForm" autocomplete="off">
+      <div class="field">
+        <label for="loginUser">Username</label>
+        <input id="loginUser" type="text" value="Admin" autocomplete="username" spellcheck="false">
+      </div>
+      <div class="field">
+        <label for="loginPass">Password</label>
+        <input id="loginPass" type="password" autocomplete="current-password">
+      </div>
+      <button class="btn-login" id="loginBtn" type="submit">SIGN IN</button>
+    </form>
+
+    <div class="login-hint">
+      Default credentials &mdash; <b>Admin</b> / <b>Admin123</b><br>
+      Change them any time from Settings after signing in.
+    </div>
+    <a class="back-link" href="/">&larr; Back to the store site</a>
+  </div>
+</div>
+
+<!-- ============================ DASHBOARD ============================ -->
+<div id="appView" style="display:none;">
+
+  <header class="topbar">
+    <div class="tb-left">
+      <div class="tb-logo">PAUSEN<span>PLAY</span></div>
+      <div class="tb-tag">Admin Console</div>
+    </div>
+    <div class="tb-right">
+      <span class="live-dot offline" id="liveDot"></span>
+      <span class="tb-clock" id="tbClock">--:--</span>
+      <span class="tb-user">Signed in as <b id="tbUser">Admin</b></span>
+      <button class="tb-btn" id="refreshBtn" type="button">Refresh</button>
+      <button class="tb-btn" id="settingsBtn" type="button">Settings</button>
+      <button class="tb-btn danger" id="logoutBtn" type="button">Log out</button>
+    </div>
+  </header>
+
+  <main>
+    <!-- ---------------------------- STATS ---------------------------- -->
+    <div class="stats">
+      <div class="stat green"><div class="n" id="statActive">0</div><div class="l">Stations in play now</div></div>
+      <div class="stat"><div class="n" id="statFree">0</div><div class="l">Free stations</div></div>
+      <div class="stat gold"><div class="n" id="statToday">0</div><div class="l">Bookings today</div></div>
+      <div class="stat blue"><div class="n" id="statHours">0h</div><div class="l">Hours played today</div></div>
+      <div class="stat"><div class="n" id="statTotal">0</div><div class="l">All time bookings</div></div>
+      <div class="stat"><div class="n" id="statPlayers">0</div><div class="l">Unique players</div></div>
+    </div>
+
+    <!-- -------------------------- FLOOR MAP -------------------------- -->
+    <section class="card">
+      <div class="card-head">
+        <h2>LIVE FLOOR</h2>
+        <div class="hint" id="mapHint">Green = free · Red = booked · Click a station to manage it</div>
+      </div>
+      <div class="card-body">
+        <div class="map-shell" id="adminMap">
+          <img src="assets/store-layout.svg" alt="PausenPlay store floor plan">
+        </div>
+        <div class="map-legend">
+          <span><i class="sw-free"></i> Free</span>
+          <span><i class="sw-busy"></i> Booked (timer = time left)</span>
+          <span><i class="sw-sel"></i> Selected</span>
+        </div>
+      </div>
+    </section>
+
+    <div class="grid-2">
+      <!-- ---------------------- ACTIVE SESSIONS ---------------------- -->
+      <section class="card">
+        <div class="card-head">
+          <h2>RUNNING SESSIONS</h2>
+          <div class="hint">Add or cut time while they play</div>
+        </div>
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Station</th><th>Player</th><th>Ends</th><th>Left</th><th>Adjust time</th>
+              </tr>
+            </thead>
+            <tbody id="activeBody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ------------------------ QUICK BOOK ------------------------- -->
+      <section class="card">
+        <div class="card-head">
+          <h2>WALK-IN BOOKING</h2>
+          <div class="hint">Book a station from the counter</div>
+        </div>
+        <div class="card-body">
+          <form id="adminBookForm">
+            <div class="form-row">
+              <div class="field">
+                <label for="adminSeat">Station</label>
+                <select class="sel" id="adminSeat"></select>
+              </div>
+              <div class="field">
+                <label for="adminName">Player name</label>
+                <input class="inp" id="adminName" type="text" maxlength="40" placeholder="Player name">
+              </div>
+              <div class="field">
+                <label for="adminPhone">Phone</label>
+                <input class="inp" id="adminPhone" type="tel" maxlength="13" placeholder="10 digit number">
+              </div>
+              <div class="field">
+                <label for="adminMinutes">Minutes</label>
+                <select class="sel" id="adminMinutes"></select>
+              </div>
+              <div class="field">
+                <button class="btn-primary" id="adminBookBtn" type="submit" style="width:100%;">START SESSION</button>
+              </div>
+            </div>
+          </form>
+          <div class="note">Sessions booked here are flagged as <b>Admin (walk-in)</b> in the Excel export.</div>
+        </div>
+      </section>
+    </div>
+
+    <!-- ---------------------- PREVIOUS BOOKINGS ---------------------- -->
+    <section class="card">
+      <div class="card-head">
+        <h2>BOOKING HISTORY</h2>
+        <div class="toolbar">
+          <input class="search" id="searchInput" type="search" placeholder="Search name, phone or station…">
+          <select class="sel" id="statusFilter">
+            <option value="">All statuses</option>
+            <option value="active">Running</option>
+            <option value="past">Finished</option>
+          </select>
+          <button class="btn-export" id="exportXlsx" type="button">⬇ EXPORT EXCEL</button>
+          <button class="btn-export csv" id="exportCsv" type="button">CSV</button>
+        </div>
+      </div>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Station</th><th>Player</th><th>Phone</th><th>Started</th><th>Ends / Ended</th>
+              <th>Minutes</th><th>Status</th><th>Booked by</th><th>Time edits</th>
+            </tr>
+          </thead>
+          <tbody id="historyBody"></tbody>
+        </table>
+      </div>
+      <div class="card-body" style="padding-top:12px;border-top:1px solid #202020;">
+        <div class="hint" id="historyCount" style="font-size:10px;color:var(--muted);letter-spacing:1px;"></div>
+      </div>
+    </section>
+
+    <!-- --------------------------- SETTINGS -------------------------- -->
+    <section class="card" id="settingsCard">
+      <div class="card-head">
+        <h2>SETTINGS</h2>
+        <div class="hint" id="credMeta">Change your admin username and password</div>
+      </div>
+      <div class="card-body">
+        <form id="credForm">
+          <div class="form-row">
+            <div class="field">
+              <label for="newUser">New username</label>
+              <input class="inp" id="newUser" type="text" maxlength="32" spellcheck="false">
+            </div>
+            <div class="field">
+              <label for="newPass">New password</label>
+              <input class="inp" id="newPass" type="password" placeholder="min 6 characters">
+            </div>
+            <div class="field">
+              <label for="confirmPass">Repeat new password</label>
+              <input class="inp" id="confirmPass" type="password">
+            </div>
+            <div class="field">
+              <label for="currentPass">Current password</label>
+              <input class="inp" id="currentPass" type="password" placeholder="required to save">
+            </div>
+            <div class="field">
+              <button class="btn-primary" id="credBtn" type="submit" style="width:100%;">SAVE CREDENTIALS</button>
+            </div>
+          </div>
+        </form>
+        <div class="note">Saving signs you out everywhere &mdash; you will need to log in again with the new credentials.</div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- ============================== MODAL ============================== -->
+<div class="modal-back" id="seatModal">
+  <div class="modal">
+    <h3 id="modalTitle">STATION</h3>
+    <div class="sub" id="modalSub">—</div>
+
+    <div id="modalBusy" style="display:none;">
+      <div class="field">
+        <label>Add or remove time</label>
+        <div class="time-btns" style="margin-bottom:6px;">
+          <button class="tbtn minus" data-delta="-30" type="button">−30m</button>
+          <button class="tbtn minus" data-delta="-15" type="button">−15m</button>
+          <button class="tbtn minus" data-delta="-5" type="button">−5m</button>
+          <button class="tbtn plus" data-delta="5" type="button">+5m</button>
+          <button class="tbtn plus" data-delta="15" type="button">+15m</button>
+          <button class="tbtn plus" data-delta="30" type="button">+30m</button>
+          <button class="tbtn plus" data-delta="60" type="button">+1h</button>
+        </div>
+      </div>
+      <div class="field">
+        <label for="customDelta">Custom change (minutes)</label>
+        <input id="customDelta" type="number" step="1" placeholder="e.g. 45 or -20">
+      </div>
+      <div class="modal-actions">
+        <button class="btn-primary" id="applyDelta" type="button">APPLY</button>
+        <button class="tbtn stop" id="endSession" type="button" style="padding:14px 18px;">END SESSION</button>
+      </div>
+    </div>
+
+    <div id="modalFree" style="display:none;">
+      <form id="modalBookForm">
+        <div class="field">
+          <label for="modalName">Player name</label>
+          <input id="modalName" type="text" maxlength="40" placeholder="Player name">
+        </div>
+        <div class="field">
+          <label for="modalPhone">Phone</label>
+          <input id="modalPhone" type="tel" maxlength="13" placeholder="10 digit number">
+        </div>
+        <div class="field">
+          <label for="modalMinutes">Minutes</label>
+          <select id="modalMinutes"></select>
+        </div>
+        <div class="modal-actions">
+          <button class="btn-primary" id="modalBookBtn" type="submit">BOOK THIS STATION</button>
+          <button class="btn-cancel" id="modalClose" type="button">CLOSE</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="modal-actions" id="modalJustClose" style="display:none;">
+      <button class="btn-cancel" id="modalClose2" type="button" style="flex:1;">CLOSE</button>
+    </div>
+  </div>
+</div>
+
+<div class="pp-toast" id="ppToast"></div>
+
+<script src="js/admin.js" defer></script>
+</body>
+</html>

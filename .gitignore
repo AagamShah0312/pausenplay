@@ -1,0 +1,7 @@
+node_modules/
+npm-debug.log*
+.DS_Store
+.env
+
+# live booking data (kept out of git — recreated on first run)
+data/
