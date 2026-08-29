@@ -39,22 +39,41 @@ The password is stored as a salted scrypt hash in `data/auth.json` — never in 
   (PS5 ×4, PC ×4, Racing ×2, Nostalgia ×2).
 * **Green = free**, **Red = booked** with a live countdown of how much time is left
   ("⏱ 42:15"), plus the player's name on the station.
-* Tap a green station → fill **name, phone, duration** → *Lock in my seat*.
-* Confirmation card + a floating **"your session is running" bar** with a ticking countdown.
-* The map updates by itself: when someone books, when a session expires, or when the admin
-  adds/removes time — no refresh needed (Server-Sent Events, with polling fallback).
+* Tap a station → fill **name, phone** → choose **Start now** or **Pick date & time**
+  (date + start time, with *in 1 / 2 / 3 hours* and *tomorrow* shortcuts) → choose the duration.
+* **Start now** begins the timer immediately. **Reserving** holds the station for the slot you
+  picked; the station stays green for everyone else until then and shows a gold
+  "⏰ 6:30 pm · reserved later" hint.
+* The form tells you straight away whether the station is free in the slot you picked
+  (or who has it, and until when) before you submit.
+* Confirmation card + a floating bar: **"your session is running"** with the time left, or
+  **"your booking is confirmed"** with a *starts in* countdown for a reservation.
+* The bar follows the counter: if staff add time it updates, and if they end or cancel the
+  session it disappears and says so — it never keeps counting a session that is already over.
+* The map updates by itself: when someone books, when a session expires, when a reservation
+  starts, or when the admin adds/removes time — no refresh needed (Server-Sent Events, with
+  polling fallback).
+* Reservation rules live in `data/state.json` → `booking`: `advanceDays` (default 30, how far
+  ahead players may book), `minAdvanceMinutes` (optional lead time) and `slotStepMinutes`.
+  Times are read in the store timezone (`TZ_NAME`, default `Asia/Kolkata`).
 
 ## Admin side (`/admin`)
 
 * **Live floor** with the same green/red stations and countdowns.
 * **Running sessions** table: station, player, end time, time left, and buttons to add or cut
   time (**−30 / −15 / +15 / +30 / +1h**) or end a session.
+* **Upcoming bookings** table: every reservation waiting to start — who, phone, when it starts
+  (with a live *in 2h 15m* countdown), how long, who made it — with **START NOW** (player turned
+  up early), **±30m** and **CANCEL**.
 * Click any station on the map to open its control pop-up — there you can add/remove time
   (quick buttons **or a custom number of minutes**) and end the session.
-* **Walk-in booking** for players who come straight to the counter.
+* **Walk-in booking** for players who come straight to the counter — leave the optional
+  **date / starts at** fields empty to start immediately, or fill them in to hold a station
+  for later.
 * **Booking history**: every booking ever made — player name, phone, station, start/end time,
-  minutes, status (running / finished), whether the customer or the admin made it, and every
-  time adjustment. Search by name, phone or station and filter running/finished.
+  minutes, status (running / scheduled / finished / ended early / cancelled), whether the
+  customer or the admin made it, and every time adjustment. Search by name, phone or station
+  and filter by status.
 * **Excel export**: `⬇ EXPORT EXCEL` downloads a real `.xlsx` ("Bookings" sheet + a
   "Station summary" sheet with sessions/hours per station). A `CSV` button is there too.
 * **Floor plan editor**: upload a photo of the store, then drag the stations onto it, resize them,
@@ -138,17 +157,18 @@ data/                  live data (auto-created, git-ignored)
 | Method | Route | Who | Purpose |
 | --- | --- | --- | --- |
 | GET | `/api/state` | public | stations + live bookings |
-| POST | `/api/book` | public | create a booking `{seatId, name, phone, minutes}` |
+| POST | `/api/book` | public | create a booking `{seatId, name, phone, minutes}` — add `{date, time}` (or `startAt`) to reserve a slot instead of starting now |
 | GET | `/api/events` | public | SSE stream of live floor changes |
 | POST | `/api/admin/login` | – | start session |
 | POST | `/api/admin/logout` | admin | end session |
 | GET | `/api/admin/me` | admin | current user |
 | POST | `/api/admin/credentials` | admin | change username/password |
-| GET | `/api/admin/state` | admin | floor + bookings + stats |
+| GET | `/api/admin/state` | admin | floor + bookings + `upcomingBookings` + stats |
 | GET | `/api/admin/history` | admin | full booking history |
-| POST | `/api/admin/book` | admin | walk-in booking |
+| POST | `/api/admin/book` | admin | walk-in booking (or a reservation with `{date, time}`) |
 | POST | `/api/admin/adjust` | admin | add/remove minutes `{bookingId, deltaMinutes}` |
-| POST | `/api/admin/end` | admin | end a session now |
+| POST | `/api/admin/start` | admin | start a reservation immediately |
+| POST | `/api/admin/end` | admin | end a running session / cancel a reservation |
 | GET | `/api/export.xlsx` | admin | Excel export |
 | GET | `/api/export.csv` | admin | CSV export |
 
@@ -158,14 +178,16 @@ data/                  live data (auto-created, git-ignored)
 
 ```bash
 npm run build   # verifies every file, parses all JS, checks the layout data and the xlsx writer
-npm test        # 32 integration tests against a real server instance
+npm test        # 48 integration tests against a real server instance
 npm run check   # build + tests
 ```
 
 The tests boot `server.js` on a random port with a temporary data directory, so they never touch
 your real bookings. They cover the public booking rules, admin auth (including the credential
 change flow), time add/remove/end, history, the Excel/CSV export (byte-level zip validation),
-live SSE updates, layout editing and image uploads.
+live SSE updates, layout editing, image uploads, date-and-time reservations (overlap rules,
+auto-start, cancel/start-early) and the exact element order Excel insists on inside the
+worksheet XML.
 
 ## Deploying
 

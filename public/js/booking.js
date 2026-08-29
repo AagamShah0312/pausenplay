@@ -1,16 +1,22 @@
 /* ============================================================
    PausenPlay — customer booking (live seat map)
    Talks to /api/state, /api/book and the /api/events live stream.
+
+   Players can either start right away or reserve a station for a
+   date + time of their choosing — the store's timezone decides what
+   "18:30" means, so the server converts the picked wall clock.
    ============================================================ */
 (function () {
   'use strict';
 
   var STORE_KEY = 'pausenplay.mySession';
   var POLL_MS = 15000;
+  var DEFAULT_TZ = 'Asia/Kolkata';
 
   var state = null;          // latest server state
   var selectedSeat = null;   // seat id currently picked in the form
   var minutes = 60;          // chosen duration
+  var whenMode = 'now';      // 'now' | 'later'
   var clockOffset = 0;       // server time - client time
   var live = false;
   var pollTimer = null;
@@ -21,6 +27,7 @@
 
   /* --------------------------- helpers --------------------------- */
   function serverNow() { return Date.now() + clockOffset; }
+  function tzName() { return (state && state.booking && state.booking.timezone) || DEFAULT_TZ; }
 
   function pad(n) { return n < 10 ? '0' + n : '' + n; }
 
@@ -35,17 +42,64 @@
 
   // every time shown to players is in the store timezone (Ahmedabad)
   var clockFmt = new Intl.DateTimeFormat('en-GB', {
-    timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: true
+    timeZone: DEFAULT_TZ, hour: '2-digit', minute: '2-digit', hour12: true
   });
-  function fmtClock(ms) {
-    return clockFmt.format(new Date(ms)).replace(' am', ' AM').replace(' pm', ' PM');
-  }
+  var dayFmt = new Intl.DateTimeFormat('en-GB', {
+    timeZone: DEFAULT_TZ, weekday: 'short', day: '2-digit', month: 'short'
+  });
+  function upper(t) { return t.replace(' am', ' AM').replace(' pm', ' PM'); }
+  function fmtClock(ms) { return upper(clockFmt.format(new Date(ms))); }
+  function fmtDay(ms) { return dayFmt.format(new Date(ms)); }
+  function fmtWhen(ms) { return fmtDay(ms) + ' · ' + fmtClock(ms); }
 
   function fmtDuration(min) {
     if (min < 60) return min + ' min';
     var h = Math.floor(min / 60);
     var m = min % 60;
     return h + 'h' + (m ? ' ' + m + 'm' : '');
+  }
+
+  /* ---- wall clock <-> instant, in the store timezone ---- */
+  function zoneOffsetMs(ms, timeZone) {
+    var parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: timeZone, hour12: false, year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit'
+    }).formatToParts(new Date(ms));
+    function get(type) {
+      for (var i = 0; i < parts.length; i++) if (parts[i].type === type) return Number(parts[i].value);
+      return 0;
+    }
+    var hour = get('hour') % 24; // some builds report midnight as 24
+    return Date.UTC(get('year'), get('month') - 1, get('day'), hour, get('minute'), get('second')) - ms;
+  }
+
+  function zonedTimeToMs(dateStr, timeStr, timeZone) {
+    var d = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(dateStr || ''));
+    var t = /^(\d{1,2}):(\d{2})$/.exec(String(timeStr || ''));
+    if (!d || !t) return null;
+    var asUTC = Date.UTC(Number(d[1]), Number(d[2]) - 1, Number(d[3]), Number(t[1]), Number(t[2]), 0);
+    var guess = asUTC - zoneOffsetMs(asUTC, timeZone);
+    return asUTC - zoneOffsetMs(guess, timeZone);
+  }
+
+  /** 'YYYY-MM-DD' + 'HH:MM' as the store sees the given instant. */
+  function wallClock(ms) {
+    var parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: tzName(), hour12: false, year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit'
+    }).formatToParts(new Date(ms));
+    var out = {};
+    parts.forEach(function (p) { out[p.type] = p.value; });
+    var hour = Number(out.hour) % 24;
+    return { date: out.year + '-' + out.month + '-' + out.day, time: pad(hour) + ':' + out.minute };
+  }
+
+  function shiftDays(dateStr, days) {
+    var d = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(dateStr || ''));
+    if (!d) return dateStr;
+    var ms = Date.UTC(Number(d[1]), Number(d[2]) - 1, Number(d[3])) + days * 86400000;
+    var x = new Date(ms);
+    return x.getUTCFullYear() + '-' + pad(x.getUTCMonth() + 1) + '-' + pad(x.getUTCDate());
   }
 
   function toast(message, kind) {
@@ -67,43 +121,94 @@
     else localStorage.removeItem(STORE_KEY);
   }
 
+  /**
+   * Find the player's own booking in the latest server snapshot.
+   * Running sessions live on their seat, reservations in `upcoming`.
+   * Returns null once the counter has ended or cancelled it.
+   */
+  function findMyBooking(s) {
+    if (!state) return undefined; // no snapshot yet — cannot say anything
+    var seat = state.seats.filter(function (x) { return x.id === s.seatId; })[0];
+    if (seat && seat.booking && seat.booking.id === s.id) {
+      return { status: 'active', startAt: seat.booking.startAt, endAt: seat.booking.endAt };
+    }
+    var up = (state.upcoming || []).filter(function (u) { return u.id === s.id; })[0];
+    if (up) return { status: 'scheduled', startAt: up.startAt, endAt: up.endAt };
+    return null;
+  }
+
   function renderMySession() {
     var s = loadSession();
     var bar = $('mySession');
     if (!bar) return;
-    if (!s) { bar.classList.remove('show'); return; }
+    if (!s) { bar.classList.remove('show', 'reserved'); return; }
 
-    // forget sessions that are over
+    var wasShown = bar.classList.contains('show');
+
     if (state) {
-      var seat = state.seats.filter(function (x) { return x.id === s.seatId; })[0];
-      var stillMine = seat && seat.booking && seat.booking.id === s.id;
-      if (!stillMine && s.endAt < serverNow() - 5000) {
-        saveSession(null);
-        bar.classList.remove('show');
-        return;
+      // a snapshot taken before the booking was made cannot know about it
+      if (!s.createdAt || state.serverTime >= s.createdAt) {
+        var liveBooking = findMyBooking(s);
+        if (liveBooking === null) {
+          var ranOut = s.endAt <= serverNow() + 2000;
+          saveSession(null);
+          bar.classList.remove('show', 'reserved');
+          if (wasShown) {
+            toast(ranOut
+              ? 'Your session on ' + s.seatLabel + ' has finished. GG!'
+              : 'Your session on ' + s.seatLabel + ' was ended by the counter. Thanks for playing!', 'ok');
+          }
+          return;
+        }
+        // the counter may have added or cut time — trust the server
+        if (liveBooking.endAt !== s.endAt || liveBooking.status !== s.status) {
+          s.endAt = liveBooking.endAt;
+          s.startAt = liveBooking.startAt;
+          s.status = liveBooking.status;
+          saveSession(s);
+        }
       }
     }
-    if (s.endAt < serverNow()) {
+
+    var pending = s.status === 'scheduled' && s.startAt > serverNow();
+    if (!pending && s.endAt < serverNow()) {
       saveSession(null);
-      bar.classList.remove('show');
-      toast('Your session on ' + s.seatLabel + ' has finished. GG!', 'ok');
+      bar.classList.remove('show', 'reserved');
+      if (wasShown) toast('Your session on ' + s.seatLabel + ' has finished. GG!', 'ok');
       return;
     }
+
     bar.classList.add('show');
+    bar.classList.toggle('reserved', pending);
     $('msSeat').textContent = s.seatLabel;
-    $('msName').textContent = s.name + ' · ends at ' + fmtClock(s.endAt);
+    if (pending) {
+      $('msLabel').textContent = 'Your booking is confirmed';
+      $('msName').textContent = s.name + ' · starts ' + fmtWhen(s.startAt);
+      $('msTimeLabel').textContent = 'Starts in';
+    } else {
+      $('msLabel').textContent = 'Your session is running';
+      $('msName').textContent = s.name + ' · ends at ' + fmtClock(s.endAt);
+      $('msTimeLabel').textContent = 'Time left';
+    }
+    tickMySession();
   }
 
   function tickMySession() {
     var s = loadSession();
     var bar = $('mySession');
-    if (!s || !bar) return;
-    var left = s.endAt - serverNow();
+    if (!s || !bar || !bar.classList.contains('show')) return;
     var t = $('msTime');
+
+    if (s.status === 'scheduled' && s.startAt > serverNow()) {
+      t.textContent = fmtCountdown(s.startAt - serverNow());
+      return;
+    }
+
+    var left = s.endAt - serverNow();
     if (left <= 0) {
       t.textContent = '00:00';
       saveSession(null);
-      setTimeout(function () { bar.classList.remove('show'); }, 1200);
+      setTimeout(function () { bar.classList.remove('show', 'reserved'); }, 1200);
       toast('Time up on ' + s.seatLabel + ' — thanks for playing!', 'ok');
       return;
     }
@@ -146,7 +251,7 @@
       name.textContent = seat.label;
 
       if (seat.status === 'busy' && seat.booking) {
-        node.classList.remove('free');
+        node.classList.remove('free', 'soon');
         node.classList.add('busy');
         var left = seat.booking.endAt - serverNow();
         meta.textContent = left > 0 ? '⏱ ' + fmtCountdown(left) : 'TIME UP';
@@ -156,15 +261,23 @@
         fill.style.width = pct + '%';
         node.classList.toggle('expiring', left > 0 && left < 5 * 60 * 1000);
         node.title = seat.label + ' — ' + (seat.booking.name || 'booked') +
-          ' · free at ' + fmtClock(seat.booking.endAt);
-        node.disabled = true;
+          ' · free at ' + fmtClock(seat.booking.endAt) + ' (tap to reserve it for later)';
+        // still clickable: the station can be reserved for a later slot
+        node.disabled = false;
       } else {
         node.classList.remove('busy', 'expiring');
         node.classList.add('free');
-        meta.textContent = 'FREE';
-        who.textContent = seat.zone || '';
+        node.classList.toggle('soon', !!seat.next);
+        if (seat.next) {
+          meta.textContent = 'FREE ⏰ ' + fmtClock(seat.next.startAt);
+          who.textContent = 'reserved later';
+          node.title = seat.label + ' — free now · reserved from ' + fmtWhen(seat.next.startAt);
+        } else {
+          meta.textContent = 'FREE';
+          who.textContent = seat.zone || '';
+          node.title = seat.label + ' — ' + seat.zone + ' (tap to book)';
+        }
         bar.style.display = 'none';
-        node.title = seat.label + ' — ' + seat.zone + ' (tap to book)';
         node.disabled = false;
       }
 
@@ -172,7 +285,11 @@
     });
 
     var free = state.seats.filter(function (s) { return s.status === 'free'; }).length;
-    if (el.freeCount) el.freeCount.textContent = free + ' of ' + state.seats.length + ' stations free';
+    if (el.freeCount) {
+      var soon = state.seats.filter(function (s) { return s.status === 'free' && s.next; }).length;
+      el.freeCount.textContent = free + ' of ' + state.seats.length + ' stations free' +
+        (soon ? ' · ' + soon + ' reserved later' : '');
+    }
   }
 
   function tickSeats() {
@@ -223,20 +340,136 @@
     wrap.dataset.built = '1';
   }
 
+  /* ---------------------- when do you play? ---------------------- */
+  function setWhenMode(mode) {
+    whenMode = mode === 'later' ? 'later' : 'now';
+    Array.prototype.forEach.call(document.querySelectorAll('#whenToggle .when-chip'), function (c) {
+      c.classList.toggle('active', c.dataset.when === whenMode);
+    });
+    var later = $('whenLater');
+    if (later) later.style.display = whenMode === 'later' ? 'block' : 'none';
+    if (whenMode === 'later' && el.dateInput && !el.dateInput.value) {
+      // default to the next full hour in the store timezone
+      var next = Math.ceil((serverNow() + 15 * 60000) / 3600000) * 3600000;
+      var wc = wallClock(next);
+      el.dateInput.value = wc.date;
+      el.timeInput.value = wc.time;
+    }
+    updateSummary();
+  }
+
+  function clampDateBounds() {
+    if (!el.dateInput) return;
+    var today = wallClock(serverNow()).date;
+    var days = state && state.booking ? Number(state.booking.advanceDays) : 30;
+    if (!Number.isFinite(days) || days <= 0) days = 30;
+    if (el.dateInput.min !== today) el.dateInput.min = today;
+    var max = shiftDays(today, days);
+    if (el.dateInput.max !== max) el.dateInput.max = max;
+    if (el.dateInput.value && (el.dateInput.value < today || el.dateInput.value > max)) {
+      el.dateInput.value = today;
+    }
+  }
+
+  /** The window the player picked, in absolute time (null when incomplete). */
+  function chosenWindow() {
+    if (whenMode !== 'later') return null;
+    if (!el.dateInput || !el.timeInput) return null;
+    var d = el.dateInput.value, t = el.timeInput.value;
+    if (!d || !t) return null;
+    var start = zonedTimeToMs(d, t, tzName());
+    if (!start) return null;
+    return { date: d, time: t, start: start, end: start + minutes * 60000 };
+  }
+
+  /** Every booking that occupies `seatId`, running or reserved. */
+  function seatBookings(seatId) {
+    var out = [];
+    if (!state) return out;
+    state.seats.forEach(function (s) {
+      if (s.id === seatId && s.booking) {
+        out.push({ id: s.booking.id, startAt: s.booking.startAt, endAt: s.booking.endAt });
+      }
+    });
+    (state.upcoming || []).forEach(function (u) {
+      if (u.seatId === seatId) out.push({ id: u.id, startAt: u.startAt, endAt: u.endAt });
+    });
+    return out;
+  }
+
+  /** The booking that blocks `seatId` during [startMs, endMs), if any. */
+  function slotClash(seatId, startMs, endMs) {
+    var mine = (loadSession() || {}).id;
+    return seatBookings(seatId).filter(function (b) {
+      return b.id !== mine && b.startAt < endMs && b.endAt > startMs;
+    })[0] || null;
+  }
+
+  function refreshSlotNote() {
+    var note = $('slotNote');
+    if (!note) return;
+    if (!state || !selectedSeat) { note.textContent = ''; note.className = 'slot-note'; return; }
+    var seat = state.seats.filter(function (s) { return s.id === selectedSeat; })[0];
+    var label = seat ? seat.label : selectedSeat;
+
+    if (whenMode === 'now') {
+      if (seat && seat.status === 'busy') {
+        note.textContent = label + ' is in play right now — free at ' + fmtClock(seat.booking.endAt) + '.';
+        note.className = 'slot-note bad';
+      } else {
+        note.textContent = label + ' is free — your timer starts the moment you book.';
+        note.className = 'slot-note good';
+      }
+      return;
+    }
+
+    var w = chosenWindow();
+    if (!w) {
+      note.textContent = 'Pick a date and a start time to see if the station is free.';
+      note.className = 'slot-note';
+      return;
+    }
+    if (w.start < serverNow() - 60000) {
+      note.textContent = 'That time has already passed — pick a slot in the future.';
+      note.className = 'slot-note bad';
+      return;
+    }
+    var clash = slotClash(selectedSeat, w.start, w.end);
+    if (clash) {
+      note.textContent = label + ' is already booked from ' + fmtClock(clash.startAt) +
+        ' to ' + fmtClock(clash.endAt) + '. Try another time or station.';
+      note.className = 'slot-note bad';
+    } else {
+      note.textContent = label + ' is free ' + fmtWhen(w.start) + ' → ' + fmtClock(w.end) + '.';
+      note.className = 'slot-note good';
+    }
+  }
+
   function updateSummary() {
     if (!$('summaryStart')) return;
-    var start = serverNow();
-    $('summaryStart').textContent = fmtClock(start) + ' → ' + fmtClock(start + minutes * 60000);
+    var startEl = $('summaryStart');
+    var w = chosenWindow();
+    if (w) {
+      startEl.textContent = fmtWhen(w.start) + ' → ' + fmtClock(w.end);
+    } else if (whenMode === 'later') {
+      startEl.textContent = 'pick a date and time';
+    } else {
+      var start = serverNow();
+      startEl.textContent = 'Now (' + fmtClock(start) + ') → ' + fmtClock(start + minutes * 60000);
+    }
     $('summaryDuration').textContent = fmtDuration(minutes);
+    var btn = $('bookSubmit');
+    if (btn) btn.textContent = whenMode === 'later' ? 'RESERVE MY STATION' : 'LOCK IN MY SEAT';
+    refreshSlotNote();
   }
 
   /* --------------------------- actions --------------------------- */
   function onSeatClick(seatId) {
     var seat = state.seats.filter(function (s) { return s.id === seatId; })[0];
     if (!seat) return;
-    if (seat.status === 'busy') {
-      toast(seat.label + ' is booked right now — free at ' + fmtClock(seat.booking.endAt) + '.', 'err');
-      return;
+    if (seat.status === 'busy' && whenMode === 'now') {
+      toast(seat.label + ' is booked right now — free at ' + fmtClock(seat.booking.endAt) +
+        '. You can still reserve it for later.', 'err');
     }
     selectedSeat = seatId;
     renderSeats();
@@ -255,11 +488,27 @@
 
   function submitBooking(e) {
     e.preventDefault();
-    if (!selectedSeat) { toast('First, tap a green station on the map.', 'err'); return; }
+    if (!selectedSeat) { toast('First, tap a station on the map.', 'err'); return; }
     var name = (el.nameInput.value || '').trim();
     var phone = (el.phoneInput.value || '').trim();
     if (name.length < 2) { toast('Please enter your name.', 'err'); el.nameInput.focus(); return; }
     if (phone.replace(/\D/g, '').length < 10) { toast('Please enter a 10 digit phone number.', 'err'); el.phoneInput.focus(); return; }
+
+    var payload = { seatId: selectedSeat, name: name, phone: phone, minutes: minutes };
+    var w = chosenWindow();
+    if (whenMode === 'later') {
+      if (!w) { toast('Please pick the date and time you want to play.', 'err'); if (el.dateInput) el.dateInput.focus(); return; }
+      payload.date = w.date;
+      payload.time = w.time;
+    } else {
+      var chosen = state ? state.seats.filter(function (s) { return s.id === selectedSeat; })[0] : null;
+      if (chosen && chosen.status === 'busy') {
+        toast(chosen.label + ' is in play until ' + fmtClock(chosen.booking.endAt) +
+          ' — switch to "Pick date & time" to reserve it for later.', 'err');
+        setWhenMode('later');
+        return;
+      }
+    }
 
     var btn = $('bookSubmit');
     btn.disabled = true;
@@ -268,28 +517,31 @@
     fetch('/api/book', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ seatId: selectedSeat, name: name, phone: phone, minutes: minutes })
+      body: JSON.stringify(payload)
     })
       .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
       .then(function (res) {
         btn.disabled = false;
-        btn.textContent = 'LOCK IN MY SEAT';
+        updateSummary();
         if (!res.ok) { toast(res.d.error || 'Could not complete the booking.', 'err'); fetchState(); return; }
         var b = res.d.booking;
         var seat = state.seats.filter(function (s) { return s.id === b.seatId; })[0];
         saveSession({
           id: b.id, seatId: b.seatId, seatLabel: seat ? seat.label : b.seatId,
-          name: b.name, endAt: b.endAt, startAt: b.startAt
+          name: b.name, startAt: b.startAt, endAt: b.endAt,
+          status: b.status, createdAt: serverNow()
         });
         selectedSeat = null;
         showDone(b, seat);
         renderMySession();
         fetchState();
-        toast('Booked! ' + (seat ? seat.label : '') + ' is yours for ' + fmtDuration(b.durationMin) + '.', 'ok');
+        toast(b.status === 'scheduled'
+          ? 'Reserved! ' + (seat ? seat.label : '') + ' is yours ' + fmtWhen(b.startAt) + '.'
+          : 'Booked! ' + (seat ? seat.label : '') + ' is yours for ' + fmtDuration(b.durationMin) + '.', 'ok');
       })
       .catch(function () {
         btn.disabled = false;
-        btn.textContent = 'LOCK IN MY SEAT';
+        updateSummary();
         toast('Network problem — please try again.', 'err');
       });
   }
@@ -300,9 +552,22 @@
     if (!form || !done) return;
     form.style.display = 'none';
     done.style.display = 'block';
+    var title = $('doneTitle');
+    if (title) title.textContent = b.status === 'scheduled' ? 'STATION RESERVED' : 'YOU ARE IN';
+    var sub = $('doneSub');
+    if (sub) {
+      sub.textContent = b.status === 'scheduled'
+        ? 'Be at the counter a few minutes before your slot'
+        : 'Show this at the counter and start playing';
+    }
     $('doneSeat').textContent = seat ? seat.label : b.seatId;
     $('doneZone').textContent = seat ? seat.zone : '';
     $('doneName').textContent = b.name;
+    var startRow = $('doneStartRow');
+    if (startRow) {
+      startRow.style.display = b.status === 'scheduled' ? 'flex' : 'none';
+      $('doneStart').textContent = fmtWhen(b.startAt);
+    }
     $('doneUntil').textContent = fmtClock(b.endAt);
     $('doneDuration').textContent = fmtDuration(b.durationMin);
   }
@@ -342,6 +607,7 @@
     if (el.mapLoading) el.mapLoading.style.display = 'none';
     if (!minutes && data.defaultDuration) minutes = data.defaultDuration;
     renderDurations();
+    clampDateBounds();
     renderSeats();
     renderMySession();
     updateSummary();
@@ -381,6 +647,8 @@
       picked: $('pickedSeat') ? $('pickedSeat').closest('.picked') : null,
       nameInput: $('playerName'),
       phoneInput: $('playerPhone'),
+      dateInput: $('startDate'),
+      timeInput: $('startTime'),
       summaryStart: $('summaryStart')
     };
 
@@ -391,8 +659,26 @@
     var again = $('bookAgain');
     if (again) again.addEventListener('click', resetForm);
 
+    Array.prototype.forEach.call(document.querySelectorAll('#whenToggle .when-chip'), function (chip) {
+      chip.addEventListener('click', function () { setWhenMode(chip.dataset.when); });
+    });
+    if (el.dateInput) {
+      el.dateInput.addEventListener('change', updateSummary);
+      el.timeInput.addEventListener('change', updateSummary);
+    }
+    Array.prototype.forEach.call(document.querySelectorAll('#quickSlots .quick-slot'), function (btn) {
+      btn.addEventListener('click', function () {
+        setWhenMode('later');
+        var minsAhead = Number(btn.dataset.minutes);
+        var wc = wallClock(serverNow() + minsAhead * 60000);
+        el.dateInput.value = wc.date;
+        el.timeInput.value = wc.time;
+        updateSummary();
+      });
+    });
+
+    setWhenMode('now');
     renderMySession();
-    updateSummary();
     fetchState();
     connectStream();
 

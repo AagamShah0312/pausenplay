@@ -36,6 +36,14 @@
       .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
 
+  var STATUS_PILL = {
+    active: { cls: 'live', label: 'Running' },
+    scheduled: { cls: 'soon', label: 'Scheduled' },
+    expired: { cls: 'done', label: 'Finished' },
+    ended: { cls: 'done', label: 'Ended early' },
+    cancelled: { cls: 'cancelled', label: 'Cancelled' }
+  };
+
   var toastTimer = null;
   function toast(msg, kind) {
     var t = $('ppToast');
@@ -175,10 +183,17 @@
         node.title = seat.label + ' — ' + seat.booking.name + ' (click to manage)';
       } else {
         node.classList.remove('busy'); node.classList.add('free');
-        meta.textContent = 'FREE';
-        who.textContent = seat.zone;
+        node.classList.toggle('soon', !!seat.next);
+        if (seat.next) {
+          meta.textContent = '⏰ ' + fmtClockOnly(seat.next.startAt);
+          who.textContent = 'reserved later';
+          node.title = seat.label + ' — free now · reserved from ' + fmtTime(seat.next.startAt);
+        } else {
+          meta.textContent = 'FREE';
+          who.textContent = seat.zone;
+          node.title = seat.label + ' — free (click to book)';
+        }
         bar.style.display = 'none';
-        node.title = seat.label + ' — free (click to book)';
       }
       node.classList.toggle('sel', selectedSeat === seat.id);
     });
@@ -239,6 +254,53 @@
     });
   }
 
+  /* --------------------- upcoming (reserved) ---------------------- */
+  function fmtUntil(ms) {
+    var mins = Math.max(0, Math.round((ms - serverNow()) / 60000));
+    if (mins < 60) return 'in ' + mins + ' min';
+    var h = Math.floor(mins / 60);
+    if (h < 24) return 'in ' + h + 'h ' + (mins % 60) + 'm';
+    return 'in ' + Math.floor(h / 24) + 'd ' + (h % 24) + 'h';
+  }
+
+  function renderUpcoming() {
+    var body = $('upcomingBody');
+    if (!body) return;
+    var rows = state.upcomingBookings || [];
+    $('upcomingCount').textContent = rows.length
+      ? rows.length + ' reservation' + (rows.length === 1 ? '' : 's') + ' waiting to start'
+      : 'Reservations players made for a later date and time';
+
+    if (!rows.length) {
+      body.innerHTML = '<tr class="empty-row"><td colspan="8">No station is reserved for later</td></tr>';
+      return;
+    }
+
+    body.innerHTML = rows.map(function (b) {
+      return '<tr data-booking="' + esc(b.id) + '">' +
+        '<td><span class="seat-tag">' + esc(b.seatLabel) + '</span><div class="mono" style="font-size:10px;">' + esc(b.zone || '') + '</div></td>' +
+        '<td class="name">' + esc(b.name) + '</td>' +
+        '<td class="mono">' + esc(b.phone || '—') + '</td>' +
+        '<td class="mono">' + fmtTime(b.startAt) + '<div class="mono" style="font-size:10px;color:var(--gold);" data-start="' + b.startAt + '">' + fmtUntil(b.startAt) + '</div></td>' +
+        '<td class="mono">' + fmtTime(b.endAt) + '</td>' +
+        '<td>' + esc(b.durationMin) + '</td>' +
+        '<td>' + (b.createdBy === 'admin' ? '<span class="pill admin">Admin</span>' : '<span class="mono">Customer</span>') + '</td>' +
+        '<td><div class="time-btns">' +
+          '<button class="tbtn go" data-act="start" data-id="' + esc(b.id) + '">START NOW</button>' +
+          '<button class="tbtn plus" data-act="adjust" data-delta="30" data-id="' + esc(b.id) + '">+30m</button>' +
+          '<button class="tbtn minus" data-act="adjust" data-delta="-30" data-id="' + esc(b.id) + '">−30m</button>' +
+          '<button class="tbtn stop" data-act="cancel" data-id="' + esc(b.id) + '">CANCEL</button>' +
+        '</div></td>' +
+        '</tr>';
+    }).join('');
+  }
+
+  function tickUpcomingCountdowns() {
+    document.querySelectorAll('#upcomingBody [data-start]').forEach(function (el) {
+      el.textContent = fmtUntil(Number(el.dataset.start));
+    });
+  }
+
   function renderHistory() {
     var body = $('historyBody');
     if (!body) return;
@@ -253,8 +315,10 @@
     var status = $('statusFilter').value;
 
     var rows = historyCache.filter(function (b) {
-      if (status === 'active' && !(b.status === 'active')) return false;
-      if (status === 'past' && b.status === 'active') return false;
+      if (status === 'active' && b.status !== 'active') return false;
+      if (status === 'scheduled' && b.status !== 'scheduled') return false;
+      if (status === 'cancelled' && b.status !== 'cancelled') return false;
+      if (status === 'past' && (b.status === 'active' || b.status === 'scheduled')) return false;
       if (!q) return true;
       var seat = (state.seats.filter(function (s) { return s.id === b.seatId; })[0] || {}).label || '';
       return (b.name || '').toLowerCase().indexOf(q) > -1 ||
@@ -270,8 +334,8 @@
 
     body.innerHTML = rows.map(function (b) {
       var seat = state.seats.filter(function (s) { return s.id === b.seatId; })[0] || { label: b.seatId, zone: '' };
-      var running = b.status === 'active';
-      var edits = (b.adjustments || []).filter(function (a) { return a.delta !== 'end'; });
+      var edits = (b.adjustments || []).filter(function (a) { return typeof a.delta === 'number'; });
+      var pill = STATUS_PILL[b.status] || { cls: 'done', label: b.status };
       return '<tr>' +
         '<td><span class="seat-tag">' + esc(seat.label) + '</span><div class="mono" style="font-size:10px;">' + esc(seat.zone) + '</div></td>' +
         '<td class="name">' + esc(b.name) + '</td>' +
@@ -279,7 +343,7 @@
         '<td class="mono">' + fmtTime(b.startAt) + '</td>' +
         '<td class="mono">' + fmtTime(b.endAt) + '</td>' +
         '<td>' + esc(b.durationMin) + '</td>' +
-        '<td><span class="pill ' + (running ? 'live' : 'done') + '">' + (running ? 'Running' : 'Finished') + '</span></td>' +
+        '<td><span class="pill ' + pill.cls + '">' + pill.label + '</span></td>' +
         '<td>' + (b.createdBy === 'admin' ? '<span class="pill admin">Admin</span>' : '<span class="mono">Customer</span>') + '</td>' +
         '<td class="mono">' + (edits.length ? edits.map(function (a) { return (a.delta > 0 ? '+' : '') + a.delta + 'm'; }).join(', ') : '—') + '</td>' +
         '</tr>';
@@ -292,9 +356,27 @@
     var sel = $('adminSeat');
     var prev = sel.value;
     sel.innerHTML = state.seats.filter(function (s) { return s.status === 'free'; })
-      .map(function (s) { return '<option value="' + esc(s.id) + '">' + esc(s.label + ' — ' + s.zone) + '</option>'; }).join('')
+      .map(function (s) {
+        var soon = s.next ? ' · reserved ' + fmtClockOnly(s.next.startAt) : '';
+        return '<option value="' + esc(s.id) + '">' + esc(s.label + ' — ' + s.zone + soon) + '</option>';
+      }).join('')
       || '<option value="">No free station</option>';
     if (prev && sel.querySelector('option[value="' + prev + '"]')) sel.value = prev;
+
+    // reservations cannot be made in the past
+    var dateInp = $('adminDate');
+    if (dateInp) {
+      var tz = (state.booking && state.booking.timezone) || 'Asia/Kolkata';
+      var today = new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' })
+        .format(new Date(serverNow()));
+      if (dateInp.min !== today) dateInp.min = today;
+      var days = Number(state.booking && state.booking.advanceDays);
+      if (Number.isFinite(days) && days > 0) {
+        var max = new Date(serverNow() + days * 86400000);
+        var maxStr = new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(max);
+        if (dateInp.max !== maxStr) dateInp.max = maxStr;
+      }
+    }
 
     ['adminMinutes', 'modalMinutes'].forEach(function (id) {
       var m = $(id);
@@ -329,6 +411,10 @@
     } else {
       $('modalFree').dataset.seat = seat.id;
       $('modalBookForm').dataset.seat = seat.id;
+      if (seat.next) {
+        $('modalSub').textContent = seat.zone + ' · reserved from ' + fmtTime(seat.next.startAt) +
+          ' to ' + fmtClockOnly(seat.next.endAt) + ' · free until then';
+      }
     }
     $('seatModal').classList.add('show');
     if (!busy) setTimeout(function () { $('modalName').focus(); }, 100);
@@ -353,8 +439,15 @@
     }).then(function (res) {
       if (!res.ok) { toast(res.data.error || 'Could not change the time.', 'err'); return; }
       var b = res.data.booking;
-      toast(delta > 0 ? 'Added ' + delta + ' minutes.' : 'Removed ' + Math.abs(delta) + ' minutes.', 'ok');
-      if (b.status === 'active') { closeModal(); } else { closeModal(); toast('Session closed.', 'ok'); }
+      if (b.status === 'scheduled') {
+        toast('Reservation is now ' + b.durationMin + ' minutes long.', 'ok');
+      } else if (b.status === 'active') {
+        toast(delta > 0 ? 'Added ' + delta + ' minutes.' : 'Removed ' + Math.abs(delta) + ' minutes.', 'ok');
+        closeModal();
+      } else {
+        closeModal();
+        toast('Session closed.', 'ok');
+      }
       loadState();
     }).catch(function () {});
   }
@@ -369,6 +462,35 @@
       if (!res.ok) { toast(res.data.error || 'Could not end the session.', 'err'); return; }
       closeModal();
       toast('Session ended — station is free again.', 'ok');
+      loadState();
+    }).catch(function () {});
+  }
+
+  /** Cancel a reservation that has not started yet. */
+  function cancelBooking(bookingId) {
+    if (!confirm('Cancel this reservation? The player will lose the slot.')) return;
+    api('/api/admin/end', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ bookingId: bookingId })
+    }).then(function (res) {
+      if (!res.ok) { toast(res.data.error || 'Could not cancel the booking.', 'err'); return; }
+      closeModal();
+      toast('Reservation cancelled — the station is open for that slot.', 'ok');
+      loadState();
+    }).catch(function () {});
+  }
+
+  /** The player turned up early — start the reserved session right away. */
+  function startBooking(bookingId) {
+    api('/api/admin/start', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ bookingId: bookingId })
+    }).then(function (res) {
+      if (!res.ok) { toast(res.data.error || 'Could not start the session.', 'err'); return; }
+      var b = res.data.booking;
+      toast('Session started — runs until ' + fmtClockOnly(b.endAt) + '.', 'ok');
       loadState();
     }).catch(function () {});
   }
@@ -652,6 +774,7 @@
       renderStats();
       if (!editing) renderMap();
       renderActive();
+      renderUpcoming();
       renderHistory();
       renderSelects();
       setLive(true);
@@ -686,6 +809,15 @@
       else if (btn.dataset.act === 'end') endSession(btn.dataset.id);
     });
 
+    // upcoming reservations
+    $('upcomingBody').addEventListener('click', function (e) {
+      var btn = e.target.closest('button[data-act]');
+      if (!btn) return;
+      if (btn.dataset.act === 'start') startBooking(btn.dataset.id);
+      else if (btn.dataset.act === 'adjust') adjust(btn.dataset.id, btn.dataset.delta);
+      else if (btn.dataset.act === 'cancel') cancelBooking(btn.dataset.id);
+    });
+
     // modal
     $('modalBusy').addEventListener('click', function (e) {
       var btn = e.target.closest('button[data-delta]');
@@ -705,7 +837,7 @@
     $('seatModal').addEventListener('click', function (e) { if (e.target === this) closeModal(); });
     document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeModal(); });
 
-    // walk-in booking
+    // walk-in booking (or a reservation for later when a date/time is filled in)
     $('adminBookForm').addEventListener('submit', function (e) {
       e.preventDefault();
       var payload = {
@@ -714,6 +846,13 @@
         phone: $('adminPhone').value.trim(),
         minutes: Number($('adminMinutes').value)
       };
+      var when = $('adminDate').value;
+      var at = $('adminTime').value;
+      if (when || at) {
+        if (!when || !at) { toast('Set both the date and the start time, or leave both empty.', 'err'); return; }
+        payload.date = when;
+        payload.time = at;
+      }
       if (!payload.seatId) { toast('No free station selected.', 'err'); return; }
       if (payload.name.length < 2) { toast('Enter the player name.', 'err'); return; }
       if (payload.phone.replace(/\D/g, '').length < 10) { toast('Enter a 10 digit phone number.', 'err'); return; }
@@ -727,8 +866,11 @@
       }).then(function (res) {
         btn.disabled = false;
         if (!res.ok) { toast(res.data.error || 'Booking failed.', 'err'); return; }
-        toast('Session started on ' + payload.seatId + '.', 'ok');
+        toast(res.data.booking.status === 'scheduled'
+          ? 'Reserved ' + payload.seatId + ' for ' + fmtTime(res.data.booking.startAt) + '.'
+          : 'Session started on ' + payload.seatId + '.', 'ok');
         $('adminName').value = ''; $('adminPhone').value = '';
+        $('adminDate').value = ''; $('adminTime').value = '';
         loadState();
       }).catch(function () { btn.disabled = false; });
     });
@@ -830,6 +972,7 @@
       $('tbClock').textContent = fmtClockOnly(serverNow());
       tickMap();
       tickActiveCountdowns();
+      tickUpcomingCountdowns();
     }, 1000);
 
     setInterval(function () { if (!live) loadState(); }, 15000);

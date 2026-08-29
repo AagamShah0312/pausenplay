@@ -112,6 +112,9 @@ main { padding: 24px 28px 60px; max-width: 1600px; margin: 0 auto; }
 .seat.busy:hover { transform: scale(1.04); box-shadow: 0 6px 18px rgba(239,68,68,.3); }
 .seat.busy .seat-meta { color: #ff8f8f; }
 .seat.sel { border-color: var(--gold); box-shadow: 0 0 0 2px rgba(255,215,0,.5); }
+/* free now but reserved for later */
+.seat.soon { border-color: rgba(255,215,0,.6); }
+.seat.soon .seat-meta { color: var(--gold); }
 .seat-bar { position: absolute; left: 4px; right: 4px; bottom: 3px; height: 3px; background: rgba(255,255,255,.15); }
 .seat-bar i { display: block; height: 100%; background: var(--red); transition: width 1s linear; }
 .map-legend { display: flex; gap: 18px; flex-wrap: wrap; font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); padding: 12px 0 0; }
@@ -140,6 +143,8 @@ td .seat-tag { font-family: 'Bebas Neue', sans-serif; font-size: 16px; letter-sp
 .pill.live { background: rgba(239,68,68,.15); color: #ff8f8f; border: 1px solid rgba(239,68,68,.4); }
 .pill.done { background: rgba(255,255,255,.05); color: var(--muted); border: 1px solid #333; }
 .pill.admin { background: rgba(68,136,255,.12); color: #8ab4ff; border: 1px solid rgba(68,136,255,.35); }
+.pill.soon { background: rgba(255,215,0,.12); color: var(--gold); border: 1px solid rgba(255,215,0,.35); }
+.pill.cancelled { background: rgba(255,255,255,.04); color: #777; border: 1px dashed #3a3a3a; text-decoration: line-through; }
 .empty-row td { text-align: center; color: #555; padding: 40px 14px; font-size: 11px; letter-spacing: 2px; text-transform: uppercase; }
 
 /* ---------------------------- CONTROLS ----------------------------- */
@@ -153,6 +158,9 @@ td .seat-tag { font-family: 'Bebas Neue', sans-serif; font-size: 16px; letter-sp
 .tbtn.minus:hover { border-color: var(--gold); color: var(--gold); }
 .tbtn.stop { color: #ff8f8f; }
 .tbtn.stop:hover { border-color: var(--red); background: rgba(239,68,68,.12); color: #fff; }
+.tbtn.go { color: var(--green); }
+.tbtn.go:hover { border-color: var(--green); background: rgba(34,197,94,.12); color: #fff; }
+.opt { text-transform: none; letter-spacing: 0; color: #555; }
 .tbtn:disabled { opacity: .4; cursor: default; }
 
 .toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
