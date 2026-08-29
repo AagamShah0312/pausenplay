@@ -14,6 +14,10 @@ Everything runs on one small **Node server with zero dependencies** — no npm i
 node server.js          # or: npm start
 # optional:  PORT=8080 node server.js
 ```
+<!-- for docker: docker-compose --profile dev up app-dev (every single time)
+To come out of it press ctrl+c to gracefully come back (Not delete containers)
+ OR 
+use docker compose --profile dev down to delete containers also -->
 
 | Page | URL | Notes |
 | --- | --- | --- |
