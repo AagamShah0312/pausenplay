@@ -156,6 +156,17 @@ function handleEvents(req, res) {
 }
 
 /* ------------------------- admin export rows ----------------------- */
+const STATUS_LABEL = {
+  active: 'Running',
+  expired: 'Completed',
+  ended: 'Ended by admin',
+  scheduled: 'Scheduled',
+  cancelled: 'Cancelled'
+};
+function statusLabel(status) {
+  return STATUS_LABEL[status] || status;
+}
+
 function exportRows() {
   const rows = [[
     'Booking ID', 'Station', 'Zone', 'Customer Name', 'Phone',
@@ -163,6 +174,7 @@ function exportRows() {
   ]];
   store.listBookings().forEach(b => {
     const seat = store.seatById(b.seatId);
+    const edits = (b.adjustments || []).filter(a => typeof a.delta === 'number');
     rows.push([
       b.id,
       seat ? seat.label : b.seatId,
@@ -172,9 +184,9 @@ function exportRows() {
       fmt(b.startAt),
       b.endAt ? fmt(b.endAt) : '',
       b.durationMin,
-      b.status === 'active' ? 'Running' : b.status === 'expired' ? 'Completed' : 'Ended by admin',
+      statusLabel(b.status),
       b.createdBy === 'admin' ? 'Admin (walk-in)' : 'Customer',
-      (b.adjustments || []).length,
+      edits.length,
       fmt(b.createdAt)
     ]);
   });
@@ -182,7 +194,7 @@ function exportRows() {
 }
 
 function exportSummaryRows() {
-  const all = store.listBookings();
+  const all = store.listBookings().filter(b => b.status !== 'cancelled');
   const bySeat = new Map();
   all.forEach(b => {
     const key = b.seatId;
@@ -197,6 +209,7 @@ function exportSummaryRows() {
     .forEach(([, v]) => rows.push([v.seat, v.sessions, v.minutes, Math.round((v.minutes / 60) * 10) / 10]));
   rows.push([]);
   rows.push(['TOTAL', all.length, all.reduce((s, b) => s + (b.durationMin || 0), 0), Math.round((all.reduce((s, b) => s + (b.durationMin || 0), 0) / 60) * 10) / 10]);
+  rows.push(['of which still to come (scheduled)', all.filter(b => b.status === 'scheduled').length, '', '']);
   return rows;
 }
 
@@ -212,6 +225,10 @@ const routes = {
       name: body.name,
       phone: body.phone,
       minutes: body.minutes,
+      // "start now" sends neither; a reservation sends date+time (or startAt)
+      startAt: body.startAt,
+      date: body.date,
+      time: body.time,
       createdBy: 'customer'
     });
     if (result.error) return sendJSON(res, 400, { error: result.error });
@@ -257,6 +274,7 @@ const routes = {
     sendJSON(res, 200, {
       ...pub,
       bookings: store.listBookings({ limit: 500 }),
+      upcomingBookings: store.listUpcoming(),
       stats: buildStats()
     });
   },
@@ -310,8 +328,21 @@ const routes = {
       name: body.name,
       phone: body.phone,
       minutes: body.minutes,
+      startAt: body.startAt,
+      date: body.date,
+      time: body.time,
       createdBy: 'admin'
     });
+    if (result.error) return sendJSON(res, 400, { error: result.error });
+    broadcast('state', store.getPublicState());
+    sendJSON(res, 200, { ok: true, booking: result.booking });
+  },
+
+  /** pull a reservation forward — the player is already at the counter */
+  'POST /api/admin/start': async (req, res) => {
+    if (!adminFrom(req, res)) return sendJSON(res, 401, { error: 'Not signed in.' });
+    const body = await readBody(req);
+    const result = store.startBooking(body.bookingId, 'admin');
     if (result.error) return sendJSON(res, 400, { error: result.error });
     broadcast('state', store.getPublicState());
     sendJSON(res, 200, { ok: true, booking: result.booking });
@@ -338,8 +369,8 @@ const routes = {
   'GET /api/export.xlsx': async (req, res) => {
     if (!adminFrom(req, res)) return sendJSON(res, 401, { error: 'Not signed in.' });
     const buf = xlsx.build([
-      { name: 'Bookings', rows: exportRows(), cols: [16, 12, 22, 22, 14, 20, 20, 10, 16, 16, 16, 20] },
-      { name: 'Station summary', rows: exportSummaryRows(), cols: [16, 16, 16, 14] }
+      { name: 'Bookings', rows: exportRows(), cols: [16, 12, 22, 22, 14, 20, 20, 10, 16, 16, 16, 20], autoFilter: true },
+      { name: 'Station summary', rows: exportSummaryRows(), cols: [34, 16, 16, 14] }
     ]);
     const name = `pausenplay-bookings-${fmtFileStamp.format(new Date()).replace(/[^\d]/g, '').slice(0, 12)}.xlsx`;
     res.writeHead(200, {
@@ -375,6 +406,7 @@ function buildStats() {
   const minutesToday = todays.reduce((s, b) => s + (b.durationMin || 0), 0);
   return {
     active: all.filter(b => b.status === 'active' && b.endAt > t).length,
+    upcoming: all.filter(b => b.status === 'scheduled' && b.endAt > t).length,
     today: todayCount,
     minutesToday,
     total: all.length,

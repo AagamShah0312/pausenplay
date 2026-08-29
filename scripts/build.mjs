@@ -8,6 +8,7 @@
  *   npm run build
  */
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -94,15 +95,16 @@ check('package.json is valid and wired up', () => {
 /* --------------------------- html sanity ----------------------------- */
 check('customer page contains the booking section', () => {
   const html = fs.readFileSync(path.join(ROOT, 'public/index.html'), 'utf8');
-  ['id="book"', 'id="storeMap"', 'id="bookForm"', 'js/booking.js', 'css/booking.css', 'id="mySession"']
+  ['id="book"', 'id="storeMap"', 'id="bookForm"', 'js/booking.js', 'css/booking.css', 'id="mySession"',
+    'id="whenToggle"', 'id="startDate"', 'id="startTime"', 'id="msLabel"']
     .forEach(token => assert(html.includes(token), `missing ${token}`));
   return 'booking section wired';
 });
 
 check('admin page contains the console markup', () => {
   const html = fs.readFileSync(path.join(ROOT, 'public/admin.html'), 'utf8');
-  ['id="loginForm"', 'id="adminMap"', 'id="activeBody"', 'id="historyBody"', 'id="exportXlsx"',
-    'id="credForm"', 'id="layoutEditor"', 'js/admin.js', 'css/admin.css']
+  ['id="loginForm"', 'id="adminMap"', 'id="activeBody"', 'id="upcomingBody"', 'id="historyBody"',
+    'id="exportXlsx"', 'id="credForm"', 'id="layoutEditor"', 'js/admin.js', 'css/admin.css']
     .forEach(token => assert(html.includes(token), `missing ${token}`));
   return 'admin console wired';
 });
@@ -153,6 +155,23 @@ check('xlsx writer produces a readable workbook', () => {
   const csv = xlsx.buildCsv([['Name', 'Minutes'], ['Rahul', 60]]);
   assert(csv.includes('Name,Minutes'), 'csv header missing');
   return buf.length + ' byte workbook';
+});
+
+/* --------------------- scheduled booking store --------------------- */
+check('store can resolve a wall-clock slot in the store timezone', () => {
+  process.env.PAUSENPLAY_DATA_DIR = process.env.PAUSENPLAY_DATA_DIR ||
+    fs.mkdtempSync(path.join(os.tmpdir(), 'pausenplay-build-'));
+  const store = require(path.join(ROOT, 'lib/store.js'));
+  const ms = store.zonedTimeToMs('2026-01-15', '18:30', store.TZ);
+  assert(Number.isFinite(ms), 'wall clock did not resolve');
+  const back = new Intl.DateTimeFormat('en-GB', {
+    timeZone: store.TZ, year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hour12: false
+  }).format(new Date(ms));
+  assert(/15\/01\/2026/.test(back) && /18:30/.test(back), 'round trip lost the wall clock: ' + back);
+  assert(store.zonedTimeToMs('2026-13-45', '18:30', store.TZ) === null, 'impossible date accepted');
+  assert(store.zonedTimeToMs('nope', '18:30', store.TZ) === null, 'garbage date accepted');
+  return store.TZ + ' wall clock round trips';
 });
 
 console.log('');

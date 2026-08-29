@@ -55,6 +55,63 @@ describe('excel / csv export', () => {
     assert.ok(sheet2.includes('TOTAL'), 'summary totals missing');
   });
 
+  test('worksheet parts list their elements in the order Excel demands', async () => {
+    const res = await srv.req('/api/export.xlsx', { headers: { cookie } });
+    const entries = readZip(Buffer.from(await res.arrayBuffer()));
+    const sheets = entries.filter(e => /^xl\/worksheets\/sheet\d+\.xml$/.test(e.name));
+    assert.ok(sheets.length >= 2, 'expected both worksheets');
+
+    // ECMA-376 CT_Worksheet sequence (a wrong order makes Excel repair the file)
+    const ORDER = ['sheetPr', 'dimension', 'sheetViews', 'sheetFormatPr', 'cols', 'sheetData',
+      'sheetCalcPr', 'sheetProtection', 'autoFilter', 'mergeCells'];
+    for (const sheet of sheets) {
+      const found = [...sheet.data.matchAll(/<([a-zA-Z]+)[\s/>]/g)]
+        .map(m => m[1])
+        .filter(tag => ORDER.includes(tag) && tag !== 'col');
+      const ranks = found.map(tag => ORDER.indexOf(tag));
+      const sorted = ranks.slice().sort((a, b) => a - b);
+      assert.deepEqual(ranks, sorted, `${sheet.name} elements out of order: ${found.join(' > ')}`);
+      assert.ok(sheet.data.includes('<sheetData>'), sheet.name + ' has no sheetData');
+      assert.ok(sheet.data.trim().endsWith('</worksheet>'), sheet.name + ' is not closed');
+    }
+  });
+
+  test('zip entries carry a usable timestamp', async () => {
+    const res = await srv.req('/api/export.xlsx', { headers: { cookie } });
+    const buf = Buffer.from(await res.arrayBuffer());
+    // walk the local file headers and decode every DOS date field
+    let p = 0;
+    let seen = 0;
+    while (buf.readUInt32LE(p) === 0x04034b50) {
+      const dosDate = buf.readUInt16LE(p + 12);
+      const month = (dosDate >> 5) & 0x0f;
+      const day = dosDate & 0x1f;
+      const year = 1980 + (dosDate >> 9);
+      assert.ok(month >= 1 && month <= 12, `entry ${seen} has an impossible month ${month}`);
+      assert.ok(day >= 1 && day <= 31, `entry ${seen} has an impossible day ${day}`);
+      assert.ok(year >= 2020 && year <= 2100, `entry ${seen} has a silly year ${year}`);
+      const nameLen = buf.readUInt16LE(p + 26);
+      const extraLen = buf.readUInt16LE(p + 28);
+      const compSize = buf.readUInt32LE(p + 18);
+      p += 30 + nameLen + extraLen + compSize;
+      seen++;
+    }
+    assert.ok(seen >= 7, 'expected every part to be checked, saw ' + seen);
+  });
+
+  test('the workbook opens as a spreadsheet package', async () => {
+    const res = await srv.req('/api/export.xlsx', { headers: { cookie } });
+    const entries = readZip(Buffer.from(await res.arrayBuffer()));
+    const types = entries.find(e => e.name === '[Content_Types].xml').data;
+    assert.match(types, /spreadsheetml\.sheet\.main\+xml/, 'workbook content type missing');
+    const rels = entries.find(e => e.name === '_rels/.rels').data;
+    assert.match(rels, /officeDocument/, 'root relationship missing');
+    const wbRels = entries.find(e => e.name === 'xl/_rels/workbook.xml.rels').data;
+    assert.match(wbRels, /styles\.xml/, 'styles relationship missing');
+    const styles = entries.find(e => e.name === 'xl/styles.xml').data;
+    assert.match(styles, /<cellStyles /, 'no default cell style — Excel complains');
+  });
+
   test('csv export holds the same records', async () => {
     const res = await srv.req('/api/export.csv', { headers: { cookie } });
     assert.equal(res.status, 200);

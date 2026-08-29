@@ -193,14 +193,41 @@
                 <select class="sel" id="adminMinutes"></select>
               </div>
               <div class="field">
-                <button class="btn-primary" id="adminBookBtn" type="submit" style="width:100%;">START SESSION</button>
+                <label for="adminDate">Date <span class="opt">(optional)</span></label>
+                <input class="inp" id="adminDate" type="date">
+              </div>
+              <div class="field">
+                <label for="adminTime">Starts at <span class="opt">(optional)</span></label>
+                <input class="inp" id="adminTime" type="time" step="900">
+              </div>
+              <div class="field">
+                <button class="btn-primary" id="adminBookBtn" type="submit" style="width:100%;">BOOK STATION</button>
               </div>
             </div>
           </form>
-          <div class="note">Sessions booked here are flagged as <b>Admin (walk-in)</b> in the Excel export.</div>
+          <div class="note">Leave the date and time empty to start the session immediately. Set them to hold a station for later — it lands in <b>Upcoming bookings</b> and is flagged as <b>Admin (walk-in)</b> in the Excel export.</div>
         </div>
       </section>
     </div>
+
+    <!-- ---------------------- UPCOMING BOOKINGS ---------------------- -->
+    <section class="card">
+      <div class="card-head">
+        <h2>UPCOMING BOOKINGS</h2>
+        <div class="hint" id="upcomingCount">Reservations players made for a later date and time</div>
+      </div>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Station</th><th>Player</th><th>Phone</th><th>Starts</th><th>Ends</th>
+              <th>Minutes</th><th>Booked by</th><th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="upcomingBody"></tbody>
+        </table>
+      </div>
+    </section>
 
     <!-- ---------------------- PREVIOUS BOOKINGS ---------------------- -->
     <section class="card">
@@ -211,7 +238,9 @@
           <select class="sel" id="statusFilter">
             <option value="">All statuses</option>
             <option value="active">Running</option>
+            <option value="scheduled">Scheduled</option>
             <option value="past">Finished</option>
+            <option value="cancelled">Cancelled</option>
           </select>
           <button class="btn-export" id="exportXlsx" type="button">⬇ EXPORT EXCEL</button>
           <button class="btn-export csv" id="exportCsv" type="button">CSV</button>

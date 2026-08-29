@@ -411,7 +411,7 @@ footer { background:#000; padding:30px 80px; display:flex; align-items:center; j
         <div class="section-tag">Live Floor Status</div>
         <h2><span class="glitch g2" data-text="GRAB YOUR">GRAB YOUR</span><br><span class="glitch accent" data-text="STATION">STATION</span></h2>
       </div>
-      <p style="color:var(--muted);font-size:13px;max-width:340px;line-height:1.8;">Green stations are free, red ones are in play &mdash; the timer shows exactly when they open up. Tap a station, drop your details and you are in.</p>
+      <p style="color:var(--muted);font-size:13px;max-width:340px;line-height:1.8;">Green stations are free, red ones are in play. Tap a station, drop your details and either start right away or reserve it for a date and time that suits you.</p>
     </div>
 
     <div class="book-wrap reveal">
@@ -422,6 +422,7 @@ footer { background:#000; padding:30px 80px; display:flex; align-items:center; j
           <div class="legend">
             <span><i class="sw-free"></i> Free</span>
             <span><i class="sw-busy"></i> Booked</span>
+            <span><i class="sw-soon"></i> Reserved later</span>
             <span><i class="sw-sel"></i> Your pick</span>
           </div>
           <div class="live-pill"><span class="live-dot offline" id="liveDot"></span><span id="liveLabel">CONNECTING&hellip;</span></div>
@@ -463,6 +464,33 @@ footer { background:#000; padding:30px 80px; display:flex; align-items:center; j
           </div>
 
           <div class="field">
+            <label>When do you want to play?</label>
+            <div class="when-toggle" id="whenToggle">
+              <button class="when-chip active" type="button" data-when="now">START NOW</button>
+              <button class="when-chip" type="button" data-when="later">PICK DATE &amp; TIME</button>
+            </div>
+            <div class="when-later" id="whenLater" style="display:none;">
+              <div class="slot-row">
+                <div>
+                  <label for="startDate">Date</label>
+                  <input id="startDate" name="date" type="date">
+                </div>
+                <div>
+                  <label for="startTime">Start time</label>
+                  <input id="startTime" name="time" type="time" step="900">
+                </div>
+              </div>
+              <div class="quick-slots" id="quickSlots">
+                <button class="quick-slot" type="button" data-minutes="60">IN 1 HOUR</button>
+                <button class="quick-slot" type="button" data-minutes="120">IN 2 HOURS</button>
+                <button class="quick-slot" type="button" data-minutes="180">IN 3 HOURS</button>
+                <button class="quick-slot" type="button" data-minutes="1440">TOMORROW</button>
+              </div>
+              <div class="slot-note" id="slotNote"></div>
+            </div>
+          </div>
+
+          <div class="field">
             <label>How long do you want to play?</label>
             <div class="durations" id="durations"></div>
           </div>
@@ -473,19 +501,20 @@ footer { background:#000; padding:30px 80px; display:flex; align-items:center; j
           </div>
 
           <button class="btn-book" id="bookSubmit" type="submit">LOCK IN MY SEAT</button>
-          <div class="form-note">Your station is held the moment you book. The countdown on the map runs live &mdash; the counter can add more time to it whenever you want.</div>
+          <div class="form-note">Booking now starts your timer straight away. Reserving holds the station for the date and time you pick &mdash; the counter can still add more time once you are in.</div>
         </form>
 
         <!-- ---------- CONFIRMATION ---------- -->
         <div class="done-card" id="bookDone" style="display:none;">
           <div class="tick">&#10003;</div>
-          <h3>YOU ARE IN</h3>
-          <div class="sub">Show this at the counter and start playing</div>
+          <h3 id="doneTitle">YOU ARE IN</h3>
+          <div class="sub" id="doneSub">Show this at the counter and start playing</div>
           <div class="done-rows">
             <div class="done-row"><span>Station</span><b class="big" id="doneSeat">&mdash;</b></div>
             <div class="done-row"><span>Zone</span><b id="doneZone">&mdash;</b></div>
             <div class="done-row"><span>Player</span><b id="doneName">&mdash;</b></div>
-            <div class="done-row"><span>Until</span><b id="doneUntil">&mdash;</b></div>
+            <div class="done-row" id="doneStartRow" style="display:none;"><span>Starts</span><b id="doneStart">&mdash;</b></div>
+            <div class="done-row"><span>Ends</span><b id="doneUntil">&mdash;</b></div>
             <div class="done-row"><span>Duration</span><b id="doneDuration">&mdash;</b></div>
           </div>
           <button class="btn-ghost" id="bookAgain" type="button">BOOK ANOTHER STATION</button>
@@ -533,12 +562,12 @@ footer { background:#000; padding:30px 80px; display:flex; align-items:center; j
 <!-- ======================== MY SESSION / TOASTS ======================== -->
 <div id="mySession">
   <div>
-    <div class="ms-label">Your session is running</div>
+    <div class="ms-label" id="msLabel">Your session is running</div>
     <div class="ms-seat" id="msSeat">&mdash;</div>
     <div class="ms-meta" id="msName">&mdash;</div>
   </div>
   <div style="text-align:right;">
-    <div class="ms-label">Time left</div>
+    <div class="ms-label" id="msTimeLabel">Time left</div>
     <div class="ms-time" id="msTime">00:00</div>
   </div>
 </div>

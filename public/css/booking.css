@@ -111,6 +111,12 @@
 
 .seat.expiring .seat-meta { color: #fff; }
 
+/* free now, but somebody has reserved it later */
+.seat.soon { border-color: rgba(255,215,0,.55); }
+.seat.soon .seat-meta { color: var(--gold); }
+.seat.soon .seat-who { color: #8a7a4a; }
+.legend .sw-soon { background: linear-gradient(135deg, var(--green) 50%, var(--gold) 50%); }
+
 /* ---------------- booking form ---------------- */
 .book-panel { background: var(--dark3); padding: 30px 28px; border-top: 3px solid var(--orange); display: flex; flex-direction: column; }
 .book-panel h3 { font-family: 'Bebas Neue', sans-serif; font-size: 30px; letter-spacing: 3px; margin-bottom: 4px; }
@@ -134,6 +140,40 @@
 }
 .field input:focus, .field select:focus { border-color: var(--orange); box-shadow: 0 0 0 3px rgba(255,107,0,.12); }
 .field input::placeholder { color: #555; }
+
+/* ---------------- when to play ---------------- */
+.when-toggle { display: flex; gap: 8px; margin-bottom: 12px; }
+.when-chip {
+  flex: 1 1 0; background: var(--dark); border: 1px solid #2e2e2e; color: var(--muted);
+  font-family: 'Bebas Neue', sans-serif; font-size: 17px; letter-spacing: 2px; padding: 12px 6px;
+  cursor: pointer; transition: all .18s;
+}
+.when-chip:hover { border-color: var(--orange); color: var(--white); }
+.when-chip.active { background: var(--orange); border-color: var(--orange); color: #000; }
+
+.when-later { border-left: 3px solid var(--orange); padding-left: 14px; }
+.slot-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.slot-row label { display: block; font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
+.slot-row input {
+  width: 100%; background: var(--dark); border: 1px solid #2e2e2e; color: var(--white);
+  font-family: 'Space Mono', monospace; font-size: 14px; padding: 12px 12px; outline: none;
+  transition: border-color .2s, box-shadow .2s;
+}
+.slot-row input:focus { border-color: var(--orange); box-shadow: 0 0 0 3px rgba(255,107,0,.12); }
+/* native date/time pickers render dark-on-dark otherwise */
+.slot-row input::-webkit-calendar-picker-indicator { filter: invert(1) sepia(1) saturate(4) hue-rotate(340deg); cursor: pointer; }
+
+.quick-slots { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.quick-slot {
+  background: transparent; border: 1px solid #333; color: var(--muted); cursor: pointer;
+  font-family: 'Space Mono', monospace; font-size: 10px; letter-spacing: 1px; padding: 7px 10px;
+  transition: all .18s;
+}
+.quick-slot:hover { border-color: var(--gold); color: var(--gold); }
+
+.slot-note { font-size: 10px; letter-spacing: 1px; line-height: 1.7; margin-top: 10px; min-height: 14px; color: var(--muted); }
+.slot-note.good { color: var(--green); }
+.slot-note.bad { color: var(--red); }
 
 .durations { display: flex; flex-wrap: wrap; gap: 8px; }
 .dur-chip {
@@ -195,6 +235,11 @@
 #mySession .ms-time { font-family: 'Space Mono', monospace; font-size: 26px; color: var(--gold); }
 #mySession .ms-meta { font-size: 11px; color: var(--muted); margin-top: 4px; }
 
+/* a reservation waiting to start reads differently from a live session */
+#mySession.reserved { background: linear-gradient(90deg, #141a06 0%, #0d1204 100%); border-color: var(--gold); border-left-color: var(--gold); }
+#mySession.reserved .ms-label { color: var(--gold); }
+#mySession.reserved .ms-time { color: var(--white); }
+
 /* ---------------- toast ---------------- */
 .pp-toast {
   position: fixed; right: 20px; bottom: 24px; z-index: 400; max-width: 340px;
@@ -217,6 +262,8 @@
 @media (max-width: 768px) {
   .map-col { padding: 12px; }
   .book-panel { padding: 24px 18px; }
+  .slot-row { grid-template-columns: 1fr; }
+  .when-chip { font-size: 15px; letter-spacing: 1px; }
   #mySession { left: 10px; right: 10px; bottom: 10px; flex-wrap: wrap; gap: 10px; padding: 12px 14px; }
   #mySession .ms-time { font-size: 22px; }
   .pp-toast { left: 12px; right: 12px; max-width: none; }
