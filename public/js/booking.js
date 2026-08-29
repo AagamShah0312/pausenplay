@@ -261,8 +261,9 @@
         fill.style.width = pct + '%';
         node.classList.toggle('expiring', left > 0 && left < 5 * 60 * 1000);
         node.title = seat.label + ' — ' + (seat.booking.name || 'booked') +
-          ' · free at ' + fmtClock(seat.booking.endAt);
-        node.disabled = true;
+          ' · free at ' + fmtClock(seat.booking.endAt) + ' (tap to reserve it for later)';
+        // still clickable: the station can be reserved for a later slot
+        node.disabled = false;
       } else {
         node.classList.remove('busy', 'expiring');
         node.classList.add('free');
@@ -499,6 +500,14 @@
       if (!w) { toast('Please pick the date and time you want to play.', 'err'); if (el.dateInput) el.dateInput.focus(); return; }
       payload.date = w.date;
       payload.time = w.time;
+    } else {
+      var chosen = state ? state.seats.filter(function (s) { return s.id === selectedSeat; })[0] : null;
+      if (chosen && chosen.status === 'busy') {
+        toast(chosen.label + ' is in play until ' + fmtClock(chosen.booking.endAt) +
+          ' — switch to "Pick date & time" to reserve it for later.', 'err');
+        setWhenMode('later');
+        return;
+      }
     }
 
     var btn = $('bookSubmit');
