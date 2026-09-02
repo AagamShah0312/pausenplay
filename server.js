@@ -446,6 +446,15 @@ const server = http.createServer(async (req, res) => {
   let pathname = url.pathname;
   if (pathname.length > 1 && pathname.endsWith('/')) pathname = pathname.slice(0, -1);
 
+    /* --- health check --- */
+  if (pathname === '/health') {
+    return sendJSON(res, 200, {
+      status: 'ok',
+      service: 'PausenPlay',
+      timestamp: new Date().toISOString()
+    });
+  }
+
   /* --- SSE --- */
   if (pathname === '/api/events') return handleEvents(req, res);
 
