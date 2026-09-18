@@ -2,7 +2,7 @@
   "name": "pausenplay",
   "version": "1.0.0",
   "private": true,
-  "description": "PausenPlay gaming lounge \u2014 customer site with live seat booking + admin console",
+  "description": "PausenPlay gaming lounge — customer site with live seat booking + admin console",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -13,5 +13,8 @@
   },
   "engines": {
     "node": ">=18"
+  },
+  "dependencies": {
+    "razorpay": "^2.9.8"
   }
 }

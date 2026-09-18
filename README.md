@@ -4,7 +4,7 @@ The PausenPlay marketing site (intro animation, hero, games, testimonials, conta
 **live booking system** built on it: customers pick a gaming station off the store floor plan,
 and the counter staff manage everything from an admin console at `/admin`.
 
-Everything runs on one small **Node server with zero dependencies** — no npm install needed.
+Everything runs on one small **Node server**. Install dependencies once with `npm install`.
 
 ---
 
@@ -60,6 +60,76 @@ The password is stored as a salted scrypt hash in `data/auth.json` — never in 
 * Reservation rules live in `data/state.json` → `booking`: `advanceDays` (default 30, how far
   ahead players may book), `minAdvanceMinutes` (optional lead time) and `slotStepMinutes`.
   Times are read in the store timezone (`TZ_NAME`, default `Asia/Kolkata`).
+
+### Razorpay Test Mode payments
+
+Customer bookings use Razorpay Test Mode. Copy `.env.example` to `.env` and set
+`RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, and a separate `RAZORPAY_WEBHOOK_SECRET` to your
+Razorpay **test** values. The secrets stay on the server and must never be committed or added to
+frontend JavaScript. Start locally with `npm start`.
+
+The browser sends booking details; the server validates the station, slot and duration, calculates
+the price, creates the Razorpay order, verifies the payment signature, re-checks availability and
+only then creates the booking. Pricing is centralized in `lib/pricing.js`, ready for future offers,
+discounts and station-specific rates.
+
+Razorpay Checkout verifies the payment in the browser-facing flow. The webhook at
+`POST /api/payment/webhook` is the server-to-server fallback when the browser closes or loses its
+connection. It verifies the exact raw request body with `RAZORPAY_WEBHOOK_SECRET`; only
+`payment.captured` may create a booking. `order.paid`, `payment.failed`, and unsupported events
+are safely acknowledged, while failed attempts are recorded without blocking a later retry on the
+same order. Both paths use the same reconciliation logic and persisted Razorpay order/payment IDs,
+so webhook retries or a browser callback arriving before/after a webhook return the one existing
+booking rather than creating another.
+
+### Test Razorpay Webhooks Locally (Windows / PowerShell)
+
+Webhook delivery is a real server-to-server request, so Razorpay cannot send it directly to
+`localhost`. Use zrok to expose the locally running server over HTTPS.
+
+1. In PowerShell, start PauseNPlay:
+
+   ```powershell
+   npm start
+   ```
+
+2. Open another PowerShell window and keep the server running. Create a public zrok tunnel:
+
+   ```powershell
+   zrok share public localhost:3000
+   ```
+
+3. Copy the public HTTPS URL printed by zrok. In Razorpay **Test Mode**, configure this webhook
+   URL:
+
+   ```text
+   <zrok-public-url>/api/payment/webhook
+   ```
+
+4. Subscribe to the events PauseNPlay uses: `payment.captured` and `payment.failed`.
+
+5. Set the matching webhook secret in the local `.env` file. Never put this value in source
+   control:
+
+   ```env
+   RAZORPAY_WEBHOOK_SECRET=your_webhook_secret_here
+   ```
+
+6. Make a Razorpay **Test Mode** payment through PauseNPlay, then check Razorpay Dashboard →
+   Developers → Webhooks for the delivery and log status. Keep the zrok PowerShell window running
+   until testing is complete; the public URL stops working when the zrok process exits.
+
+The webhook signature is verified against the exact raw request body. Do not parse and
+re-serialize a webhook payload before signature verification. The public zrok URL is temporary,
+so do not hard-code it in the application or documentation.
+
+| Duration | Price |
+| --- | --- |
+| 30 min | ₹25 |
+| 60 min | ₹50 |
+| 90 min | ₹75 |
+| 120 min | ₹100 |
+| 180 min | ₹150 |
 
 ## Admin side (`/admin`)
 
@@ -161,6 +231,9 @@ data/                  live data (auto-created, git-ignored)
 | Method | Route | Who | Purpose |
 | --- | --- | --- | --- |
 | GET | `/api/state` | public | stations + live bookings |
+| POST | `/api/payment/create-order` | public | validate and price booking data, then create a Razorpay order |
+| POST | `/api/payment/verify` | public | verify Razorpay payment and create the booking exactly once |
+| POST | `/api/payment/webhook` | Razorpay | raw-body signed webhook reconciliation fallback |
 | POST | `/api/book` | public | create a booking `{seatId, name, phone, minutes}` — add `{date, time}` (or `startAt`) to reserve a slot instead of starting now |
 | GET | `/api/events` | public | SSE stream of live floor changes |
 | POST | `/api/admin/login` | – | start session |

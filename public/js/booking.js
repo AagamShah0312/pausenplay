@@ -514,30 +514,41 @@
     btn.disabled = true;
     btn.textContent = 'BOOKING…';
 
-    fetch('/api/book', {
+    fetch('/api/payment/create-order', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     })
       .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
       .then(function (res) {
-        btn.disabled = false;
-        updateSummary();
-        if (!res.ok) { toast(res.d.error || 'Could not complete the booking.', 'err'); fetchState(); return; }
-        var b = res.d.booking;
-        var seat = state.seats.filter(function (s) { return s.id === b.seatId; })[0];
-        saveSession({
-          id: b.id, seatId: b.seatId, seatLabel: seat ? seat.label : b.seatId,
-          name: b.name, startAt: b.startAt, endAt: b.endAt,
-          status: b.status, createdAt: serverNow()
+        if (!res.ok) { btn.disabled = false; updateSummary(); toast(res.d.error || 'Could not prepare payment.', 'err'); fetchState(); return; }
+        if (!window.Razorpay) { btn.disabled = false; updateSummary(); toast('Payment checkout did not load. Please try again.', 'err'); return; }
+        btn.textContent = 'OPENING PAYMENT...';
+        var completed = false;
+        var checkout = new window.Razorpay({
+          key: res.d.keyId, order_id: res.d.order.id, amount: res.d.order.amount, currency: res.d.order.currency,
+          name: 'PausenPlay', description: 'Gaming station booking',
+          prefill: { name: name, contact: phone.replace(/\D/g, '') }, theme: { color: '#d6ff00' },
+          handler: function (payment) {
+            completed = true;
+            btn.textContent = 'VERIFYING PAYMENT...';
+            fetch('/api/payment/verify', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payment) })
+              .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
+              .then(function (verified) {
+                btn.disabled = false; updateSummary();
+                if (!verified.ok) { toast(verified.d.error || 'Payment could not be verified.', 'err'); fetchState(); return; }
+                var b = verified.d.booking;
+                var seat = state.seats.filter(function (s) { return s.id === b.seatId; })[0];
+                saveSession({ id: b.id, seatId: b.seatId, seatLabel: seat ? seat.label : b.seatId, name: b.name, startAt: b.startAt, endAt: b.endAt, status: b.status, createdAt: serverNow() });
+                selectedSeat = null; showDone(b, seat); renderMySession(); fetchState();
+                toast(b.status === 'scheduled' ? 'Reserved! ' + (seat ? seat.label : '') + ' is yours ' + fmtWhen(b.startAt) + '.' : 'Booked! ' + (seat ? seat.label : '') + ' is yours for ' + fmtDuration(b.durationMin) + '.', 'ok');
+              })
+              .catch(function () { btn.disabled = false; updateSummary(); toast('Network problem while verifying payment. Contact the lounge if you were charged.', 'err'); });
+          },
+          modal: { ondismiss: function () { if (!completed) { btn.disabled = false; updateSummary(); toast('Payment was cancelled.', 'err'); } } }
         });
-        selectedSeat = null;
-        showDone(b, seat);
-        renderMySession();
-        fetchState();
-        toast(b.status === 'scheduled'
-          ? 'Reserved! ' + (seat ? seat.label : '') + ' is yours ' + fmtWhen(b.startAt) + '.'
-          : 'Booked! ' + (seat ? seat.label : '') + ' is yours for ' + fmtDuration(b.durationMin) + '.', 'ok');
+        checkout.on('payment.failed', function () { btn.disabled = false; updateSummary(); toast('Payment failed. Please try again.', 'err'); });
+        checkout.open();
       })
       .catch(function () {
         btn.disabled = false;

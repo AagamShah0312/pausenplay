@@ -1,0 +1,34 @@
+Here are the three methods to achieve automated or streamlined bookings with **zero transaction charges**:
+
+---
+
+### Method 1: The "I Have Paid" Verification Loop (100% Free & Automatic for Gamers)
+
+This keeps the booking automated for the gamer while requiring only a single click from your staff.
+
+1. **Gamer selects PC & Hours** on your website.
+2. **Website generates the Dynamic UPI QR** (pre-filled with the exact amount, e.g., ₹75).
+3. **Gamer scans & pays** on GPay/PhonePe.
+4. **Gamer clicks "I Have Paid"** on the screen and enters their UPI UTR/Ref Number (or the site shows a 4-digit token).
+5. **Staff gets a pop-up** on an Admin Dashboard (or phone) showing: `PC 3 | ₹75 | Pending`.
+6. Staff checks their phone notification/Soundbox and hits **"Approve"**. The website instantly unlocks the PC session.
+
+---
+
+### Method 2: Free Bank Webhooks via ICICI / HDFC / Axis Corporate Accounts
+
+If you have a current business account with major banks, ask them for **UPI Merchant Smart Collect API access**.
+
+* **How it works:** The bank gives you direct API credentials.
+* **Cost:** 0% transaction fees (mandated by NPCI for direct peer-to-merchant UPI in many account tiers).
+* **Process:** Your server creates a dynamic VPA/QR, the user pays, and your bank sends an instant HTTP webhook directly to your website server to unlock the station automatically.
+
+---
+
+### Method 3: Android SMS Forwarder / Notification Listener
+
+If you receive payments on a dedicated shop phone:
+
+1. Install a secure, private SMS/Notification forwarder app on your studio's Android phone.
+2. When GPay/Paytm sends a "Received ₹100 for PC 2" notification, the app reads the amount and sends a message to your website's backend.
+3. Your website matches the received payment to the pending order and automatically marks the PC as booked—**zero fees, zero manual clicks.**

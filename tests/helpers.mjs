@@ -24,7 +24,7 @@ export async function freePort() {
  * Boot the real server in a temp data directory so tests never touch the
  * store's live data. Returns a tiny http helper bound to that instance.
  */
-export async function startServer() {
+export async function startServer({ webhookSecret = 'test_webhook_secret' } = {}) {
   const port = await freePort();
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pausenplay-test-'));
   const assetsDir = path.join(dataDir, 'assets');
@@ -37,6 +37,9 @@ export async function startServer() {
       ...process.env,
       PORT: String(port),
       HOST: '127.0.0.1',
+      NODE_ENV: 'test',
+      PAUSENPLAY_TEST_ALLOW_UNPAID_BOOKINGS: '1',
+      RAZORPAY_WEBHOOK_SECRET: webhookSecret,
       PAUSENPLAY_DATA_DIR: dataDir,
       PAUSENPLAY_ASSETS_DIR: assetsDir
     },

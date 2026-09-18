@@ -1,4 +1,7 @@
 'use strict';
+
+process.loadEnvFile();
+
 /**
  * PausenPlay — booking server
  *
@@ -24,6 +27,9 @@ const { ASSETS_DIR } = require('./lib/paths');
 const store = require('./lib/store');
 const auth = require('./lib/auth');
 const xlsx = require('./lib/xlsx');
+const razorpay = require('./lib/razorpay');
+const { getBookingPrice } = require('./lib/pricing');
+const { verifyRazorpaySignature, verifyRazorpayWebhookSignature, reconcileCapturedPayment } = require('./lib/payment');
 
 const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, 'public');
@@ -80,6 +86,24 @@ function readBody(req, limit = 128 * 1024) {
         reject(new Error('Invalid JSON'));
       }
     });
+    req.on('error', reject);
+  });
+}
+
+function readRawBody(req, limit = 128 * 1024) {
+  return new Promise((resolve, reject) => {
+    let size = 0;
+    const chunks = [];
+    req.on('data', chunk => {
+      size += chunk.length;
+      if (size > limit) {
+        reject(new Error('Payload too large'));
+        req.destroy();
+        return;
+      }
+      chunks.push(chunk);
+    });
+    req.on('end', () => resolve(Buffer.concat(chunks)));
     req.on('error', reject);
   });
 }
@@ -216,24 +240,153 @@ function exportSummaryRows() {
 /* ------------------------------ routing ---------------------------- */
 const routes = {
   /* ---------------- public ---------------- */
+  'POST /api/payment/webhook': async (req, res) => {
+    if (!razorpay.webhookSecret) return sendJSON(res, 503, { error: 'Webhook processing is not configured.' });
+    let rawBody;
+    try {
+      rawBody = await readRawBody(req);
+    } catch (err) {
+      return sendJSON(res, err.message === 'Payload too large' ? 413 : 400, { error: 'Invalid webhook request.' });
+    }
+    if (!verifyRazorpayWebhookSignature({
+      rawBody,
+      signature: req.headers['x-razorpay-signature'],
+      webhookSecret: razorpay.webhookSecret
+    })) {
+      console.warn('Rejected Razorpay webhook with invalid signature.');
+      return sendJSON(res, 400, { error: 'Invalid webhook signature.' });
+    }
+    let event;
+    try {
+      event = JSON.parse(rawBody.toString('utf8'));
+    } catch (err) {
+      return sendJSON(res, 400, { error: 'Invalid webhook payload.' });
+    }
+    try {
+      // payment.captured is authoritative: order.paid can be delivered before
+      // or after it, so acknowledging it avoids a second booking trigger.
+      if (event.event === 'payment.captured') {
+        const result = reconcileCapturedPayment({ store, payment: event.payload && event.payload.payment && event.payload.payment.entity });
+        if (result.error) {
+          console.warn('Could not reconcile captured Razorpay payment:', result.error);
+          return sendJSON(res, 409, { error: 'Payment could not be reconciled.' });
+        }
+        if (!result.duplicate) broadcast('state', store.getPublicState());
+      } else if (event.event === 'payment.failed') {
+        const payment = event.payload && event.payload.payment && event.payload.payment.entity;
+        if (payment && typeof payment.order_id === 'string') store.markPaymentFailed({ razorpayOrderId: payment.order_id, razorpayPaymentId: payment.id });
+      }
+      // order.paid and unknown events are intentionally acknowledged. Only a
+      // captured payment is allowed to create a booking.
+      return sendJSON(res, 200, { ok: true });
+    } catch (err) {
+      console.error('Razorpay webhook processing failed:', err.message);
+      return sendJSON(res, 500, { error: 'Webhook processing failed.' });
+    }
+  },
+
+  'POST /api/payment/create-order': async (req, res) => {
+    if (!razorpay.isConfigured) return sendJSON(res, 503, { error: 'Online payments are not configured yet.' });
+    try {
+      const body = await readBody(req);
+      // Validation and conflict detection happen before a Razorpay order exists.
+      const check = store.validateBookingInput(body);
+      if (check.error) return sendJSON(res, 400, { error: check.error });
+      if (!store.state.durations.includes(check.minutes)) {
+        return sendJSON(res, 400, { error: 'That duration is not available.' });
+      }
+      const price = getBookingPrice({ seatId: check.seat.id, minutes: check.minutes });
+      if (price.error || !Number.isSafeInteger(price.amountPaise)) {
+        return sendJSON(res, 400, { error: price.error || 'Unable to price this booking.' });
+      }
+      const order = await razorpay.client.orders.create({
+        amount: price.amountPaise,
+        currency: price.currency,
+        receipt: `pp_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`
+      });
+      if (!order || !order.id || order.amount !== price.amountPaise || order.currency !== price.currency) {
+        console.error('Razorpay returned an unexpected order for the requested price.');
+        return sendJSON(res, 502, { error: 'Unable to create payment order. Please try again.' });
+      }
+      const pending = store.createPendingPayment({
+        razorpayOrderId: order.id,
+        amountPaise: price.amountPaise,
+        currency: price.currency,
+        booking: body
+      });
+      if (pending.error) {
+        console.error('Could not persist Razorpay order:', pending.error);
+        return sendJSON(res, 500, { error: 'Unable to prepare payment. Please try again.' });
+      }
+      sendJSON(res, 200, { ok: true, keyId: razorpay.keyId, order: { id: order.id, amount: price.amountPaise, currency: price.currency } });
+    } catch (err) {
+      console.error('Razorpay order creation failed:', err.message);
+      sendJSON(res, 502, { error: 'Unable to create payment order. Please try again.' });
+    }
+  },
+
+  'POST /api/payment/verify': async (req, res) => {
+    if (!razorpay.isConfigured) return sendJSON(res, 503, { error: 'Online payments are not configured yet.' });
+    try {
+      const body = await readBody(req);
+      const orderId = String(body.razorpay_order_id || '');
+      const paymentId = String(body.razorpay_payment_id || '');
+      const signature = String(body.razorpay_signature || '');
+      const pending = store.paymentForOrder(orderId);
+      if (!pending) return sendJSON(res, 400, { error: 'Payment order was not found.' });
+      if (!verifyRazorpaySignature({ orderId, paymentId, signature, keySecret: razorpay.keySecret })) {
+        console.warn('Rejected Razorpay signature for order', orderId);
+        return sendJSON(res, 400, { error: 'Payment verification failed.' });
+      }
+      // Fetching Razorpay's records prevents a valid signature for one payment
+      // from being used with a different order, currency or amount.
+      const [order, payment] = await Promise.all([
+        razorpay.client.orders.fetch(orderId),
+        razorpay.client.payments.fetch(paymentId)
+      ]);
+      if (!order || !payment || order.id !== orderId || payment.order_id !== orderId ||
+          payment.amount !== pending.amountPaise || order.amount !== pending.amountPaise ||
+          payment.currency !== pending.currency || order.currency !== pending.currency ||
+          !['authorized', 'captured'].includes(payment.status)) {
+        console.warn('Rejected mismatched Razorpay payment for order', orderId);
+        return sendJSON(res, 400, { error: 'Payment does not match this booking.' });
+      }
+      const result = reconcileCapturedPayment({ store, payment });
+      if (result.error) return sendJSON(res, 409, { error: result.error });
+      broadcast('state', store.getPublicState());
+      sendJSON(res, 200, { ok: true, booking: result.booking, duplicate: Boolean(result.duplicate) });
+    } catch (err) {
+      console.error('Razorpay payment verification failed:', err.message);
+      sendJSON(res, 502, { error: 'Unable to verify payment. Please contact the lounge if you were charged.' });
+    }
+  },
+
+  'POST /api/payment/test-pending': async (req, res) => {
+    if (process.env.NODE_ENV !== 'test') return sendJSON(res, 404, { error: 'Unknown endpoint' });
+    const body = await readBody(req);
+    const result = store.createPendingPayment({
+      razorpayOrderId: body.razorpayOrderId,
+      amountPaise: body.amountPaise,
+      currency: body.currency || 'INR',
+      booking: body.booking
+    });
+    if (result.error) return sendJSON(res, 400, { error: result.error });
+    sendJSON(res, 200, { ok: true });
+  },
   'GET /api/state': async (req, res) => sendJSON(res, 200, store.getPublicState()),
 
   'POST /api/book': async (req, res) => {
-    const body = await readBody(req);
-    const result = store.createBooking({
-      seatId: body.seatId,
-      name: body.name,
-      phone: body.phone,
-      minutes: body.minutes,
-      // "start now" sends neither; a reservation sends date+time (or startAt)
-      startAt: body.startAt,
-      date: body.date,
-      time: body.time,
-      createdBy: 'customer'
-    });
-    if (result.error) return sendJSON(res, 400, { error: result.error });
-    broadcast('state', store.getPublicState());
-    sendJSON(res, 200, { ok: true, booking: result.booking });
+    // The legacy endpoint is retained only for the isolated test suite. It is
+    // not reachable in normal deployments, so customer bookings require a
+    // verified Razorpay payment.
+    if (process.env.NODE_ENV === 'test' && process.env.PAUSENPLAY_TEST_ALLOW_UNPAID_BOOKINGS === '1') {
+      const body = await readBody(req);
+      const result = store.createBooking({ ...body, createdBy: 'customer' });
+      if (result.error) return sendJSON(res, 400, { error: result.error });
+      broadcast('state', store.getPublicState());
+      return sendJSON(res, 200, { ok: true, booking: result.booking });
+    }
+    sendJSON(res, 410, { error: 'Complete payment before creating a customer booking.' });
   },
 
   /* ---------------- admin auth ---------------- */
@@ -467,7 +620,7 @@ const server = http.createServer(async (req, res) => {
       await handler(req, res);
     } catch (err) {
       console.error('[api]', key, err.message);
-      if (!res.headersSent) sendJSON(res, 500, { error: 'Server error: ' + err.message });
+      if (!res.headersSent) sendJSON(res, 500, { error: 'Server error.' });
     }
     return;
   }

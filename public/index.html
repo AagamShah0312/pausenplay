@@ -440,7 +440,7 @@ footer { background:#000; padding:30px 80px; display:flex; align-items:center; j
       <div class="book-panel">
         <form id="bookForm" novalidate>
           <h3>BOOK THIS STATION</h3>
-          <div class="sub">Walk-in booking &middot; pay at the counter</div>
+          <div class="sub">Secure online payment &middot; booking confirmed after payment</div>
 
           <div class="picked empty">
             <div>
@@ -1184,6 +1184,7 @@ document.querySelectorAll('a[href^="#"]').forEach(a => {
 document.body.style.overflow = 'hidden';
 window.addEventListener('load', () => requestAnimationFrame(animIntro));
 </script>
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
 <script src="js/booking.js" defer></script>
 </body>
 </html>
