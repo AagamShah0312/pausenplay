@@ -295,7 +295,7 @@ const routes = {
       if (!store.state.durations.includes(check.minutes)) {
         return sendJSON(res, 400, { error: 'That duration is not available.' });
       }
-      const price = getBookingPrice({ seatId: check.seat.id, minutes: check.minutes });
+      const price = getBookingPrice({ seatId: check.seat.id, minutes: check.minutes, hourlyRate: check.seat.hourlyRate });
       if (price.error || !Number.isSafeInteger(price.amountPaise)) {
         return sendJSON(res, 400, { error: price.error || 'Unable to price this booking.' });
       }
@@ -312,6 +312,7 @@ const routes = {
         razorpayOrderId: order.id,
         amountPaise: price.amountPaise,
         currency: price.currency,
+        hourlyRate: price.hourlyRate,
         booking: body
       });
       if (pending.error) {
@@ -439,6 +440,15 @@ const routes = {
     if (result.error) return sendJSON(res, 400, { error: result.error });
     broadcast('state', store.getPublicState());
     sendJSON(res, 200, { ok: true, seats: result.seats, layout: result.layout });
+  },
+
+  'POST /api/admin/pricing': async (req, res) => {
+    if (!adminFrom(req, res)) return sendJSON(res, 401, { error: 'Not signed in.' });
+    const body = await readBody(req);
+    const result = store.updateStationPricing({ seatId: body.seatId, hourlyRate: body.hourlyRate });
+    if (result.error) return sendJSON(res, 400, { error: result.error });
+    broadcast('state', store.getPublicState());
+    sendJSON(res, 200, { ok: true, station: result.seat });
   },
 
   'POST /api/admin/layout-image': async (req, res) => {

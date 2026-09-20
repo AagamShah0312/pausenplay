@@ -58,6 +58,8 @@
     var m = min % 60;
     return h + 'h' + (m ? ' ' + m + 'm' : '');
   }
+  function fmtPrice(amount) { return '₹' + Number(amount || 0).toLocaleString('en-IN'); }
+  function selectedStation() { return state && state.seats.filter(function (s) { return s.id === selectedSeat; })[0]; }
 
   /* ---- wall clock <-> instant, in the store timezone ---- */
   function zoneOffsetMs(ms, timeZone) {
@@ -458,6 +460,9 @@
       startEl.textContent = 'Now (' + fmtClock(start) + ') → ' + fmtClock(start + minutes * 60000);
     }
     $('summaryDuration').textContent = fmtDuration(minutes);
+    var seat = selectedStation();
+    $('summaryRate').textContent = seat ? fmtPrice(seat.hourlyRate) + '/hour' : 'Pick a station';
+    $('summaryPrice').textContent = seat ? fmtPrice(seat.hourlyRate * minutes / 60) : '—';
     var btn = $('bookSubmit');
     if (btn) btn.textContent = whenMode === 'later' ? 'RESERVE MY STATION' : 'LOCK IN MY SEAT';
     refreshSlotNote();

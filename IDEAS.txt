@@ -32,3 +32,6 @@ If you receive payments on a dedicated shop phone:
 1. Install a secure, private SMS/Notification forwarder app on your studio's Android phone.
 2. When GPay/Paytm sends a "Received ₹100 for PC 2" notification, the app reads the amount and sends a message to your website's backend.
 3. Your website matches the received payment to the pending order and automatically marks the PC as booked—**zero fees, zero manual clicks.**
+
+
+ZROK2 token: mQfJPtS6hr3P

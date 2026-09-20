@@ -1,0 +1,6 @@
+Database,Type,Free Storage Limit,Key Advantage
+Turso,Edge SQLite (LibSQL),5 GB,Highest free storage; fast edge execution
+Cloudflare D1,Serverless SQLite,5 GB,High storage; native Cloudflare integration
+Neon.tech,Serverless PostgreSQL,500 MB,Best PostgreSQL platform; static .env URL
+Supabase,PostgreSQL + Auth APIs,500 MB,Comes with built-in Auth & real-time updates
+MongoDB Atlas,NoSQL / Document,500 MB,Easiest code transition from your .json files

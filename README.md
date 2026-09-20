@@ -73,6 +73,13 @@ the price, creates the Razorpay order, verifies the payment signature, re-checks
 only then creates the booking. Pricing is centralized in `lib/pricing.js`, ready for future offers,
 discounts and station-specific rates.
 
+### Station pricing
+
+Each station has one admin-configured hourly price (₹50/hour by default). The customer total and
+Razorpay order are always calculated on the server from that rate: 30 minutes = 0.5×, 60 = 1×,
+90 = 1.5×, 120 = 2×, and 180 = 3×. The booking stores the hourly rate and final amount used, so
+later price changes never alter historical charges.
+
 Razorpay Checkout verifies the payment in the browser-facing flow. The webhook at
 `POST /api/payment/webhook` is the server-to-server fallback when the browser closes or loses its
 connection. It verifies the exact raw request body with `RAZORPAY_WEBHOOK_SECRET`; only
@@ -208,6 +215,26 @@ station coordinates, so it stays sharp on any screen.
 
 `data/` is git-ignored and recreated automatically on the first run (with the default
 `Admin` / `Admin123` credentials). Delete the folder to reset everything.
+
+## MongoDB Atlas migration
+
+MongoDB support uses the official Node.js driver and the `state`, `bookings`, and `payments`
+collections. Configure these values locally (never commit `.env`):
+
+```env
+MONGODB_URI=your_mongodb_atlas_connection_string
+MONGODB_DB_NAME=pausenplay
+```
+
+Before switching a deployment, preserve the JSON files and run:
+
+```powershell
+node scripts/migrate-json-to-mongodb.mjs
+```
+
+The migration upserts the singleton state document and inserts bookings/payments by their existing
+application identifiers, so it can be rerun safely. Verify the migrated records in Atlas before
+removing or changing any local JSON data.
 
 ## Project layout
 

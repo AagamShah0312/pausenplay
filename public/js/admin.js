@@ -388,6 +388,14 @@
     });
   }
 
+  function renderPricing() {
+    var body = $('pricingBody');
+    if (!body || !state) return;
+    body.innerHTML = state.seats.map(function (seat) {
+      return '<tr><td><span class="seat-tag">' + esc(seat.label) + '</span></td><td><input class="inp" data-rate="' + esc(seat.id) + '" type="number" min="1" step="1" value="' + esc(seat.hourlyRate || 50) + '" style="width:100px;"></td><td><button class="btn-primary" data-save-rate="' + esc(seat.id) + '" type="button">SAVE</button></td></tr>';
+    }).join('');
+  }
+
   /* ----------------------------- modal ----------------------------- */
   function openSeatModal(seatId) {
     var seat = state.seats.filter(function (s) { return s.id === seatId; })[0];
@@ -503,7 +511,7 @@
 
   function cloneSeats(list) {
     return (list || []).map(function (s) {
-      return { id: s.id, label: s.label, zone: s.zone, type: s.type, x: s.x, y: s.y, w: s.w, h: s.h };
+      return { id: s.id, label: s.label, zone: s.zone, type: s.type, hourlyRate: s.hourlyRate, x: s.x, y: s.y, w: s.w, h: s.h };
     });
   }
 
@@ -777,6 +785,7 @@
       renderUpcoming();
       renderHistory();
       renderSelects();
+      renderPricing();
       setLive(true);
     }).catch(function () { setLive(false); });
   }
@@ -799,6 +808,16 @@
     $('refreshBtn').addEventListener('click', function () { loadState(); toast('Refreshed.', 'ok'); });
     $('settingsBtn').addEventListener('click', function () {
       document.getElementById('settingsCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+    $('pricingBody').addEventListener('click', function (e) {
+      var btn = e.target.closest('button[data-save-rate]');
+      if (!btn) return;
+      var seatId = btn.dataset.saveRate;
+      var input = $('pricingBody').querySelector('input[data-rate="' + seatId + '"]');
+      btn.disabled = true;
+      api('/api/admin/pricing', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ seatId: seatId, hourlyRate: input.value }) })
+        .then(function (res) { btn.disabled = false; if (!res.ok) return toast(res.data.error || 'Could not save price.', 'err'); toast('Saved ' + res.data.station.label + ' at ₹' + res.data.station.hourlyRate + '/hour.', 'ok'); loadState(); })
+        .catch(function () { btn.disabled = false; toast('Could not save price.', 'err'); });
     });
 
     // seat map / table actions
