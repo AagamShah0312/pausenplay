@@ -156,7 +156,8 @@ function broadcast(event, payload) {
   });
 }
 
-function handleEvents(req, res) {
+async function handleEvents(req, res) {
+  const publicState = await store.getPublicState();
   res.writeHead(200, {
     'Content-Type': 'text/event-stream; charset=utf-8',
     'Cache-Control': 'no-cache, no-transform',
@@ -164,7 +165,7 @@ function handleEvents(req, res) {
     'X-Accel-Buffering': 'no'
   });
   res.write('retry: 3000\n\n');
-  res.write(`event: state\ndata: ${JSON.stringify(store.getPublicState())}\n\n`);
+  res.write(`event: state\ndata: ${JSON.stringify(publicState)}\n\n`);
   clients.add(res);
   const keepAlive = setInterval(() => {
     try {
@@ -191,12 +192,12 @@ function statusLabel(status) {
   return STATUS_LABEL[status] || status;
 }
 
-function exportRows() {
+async function exportRows() {
   const rows = [[
     'Booking ID', 'Station', 'Zone', 'Customer Name', 'Phone',
     'Start', 'End', 'Minutes', 'Status', 'Booked By', 'Time Adjustments', 'Booked At'
   ]];
-  store.listBookings().forEach(b => {
+  (await store.listBookings()).forEach(b => {
     const seat = store.seatById(b.seatId);
     const edits = (b.adjustments || []).filter(a => typeof a.delta === 'number');
     rows.push([
@@ -217,8 +218,8 @@ function exportRows() {
   return rows;
 }
 
-function exportSummaryRows() {
-  const all = store.listBookings().filter(b => b.status !== 'cancelled');
+async function exportSummaryRows() {
+  const all = (await store.listBookings()).filter(b => b.status !== 'cancelled');
   const bySeat = new Map();
   all.forEach(b => {
     const key = b.seatId;
@@ -266,15 +267,15 @@ const routes = {
       // payment.captured is authoritative: order.paid can be delivered before
       // or after it, so acknowledging it avoids a second booking trigger.
       if (event.event === 'payment.captured') {
-        const result = reconcileCapturedPayment({ store, payment: event.payload && event.payload.payment && event.payload.payment.entity });
+        const result = await reconcileCapturedPayment({ store, payment: event.payload && event.payload.payment && event.payload.payment.entity });
         if (result.error) {
           console.warn('Could not reconcile captured Razorpay payment:', result.error);
           return sendJSON(res, 409, { error: 'Payment could not be reconciled.' });
         }
-        if (!result.duplicate) broadcast('state', store.getPublicState());
+        if (!result.duplicate) broadcast('state', await store.getPublicState());
       } else if (event.event === 'payment.failed') {
         const payment = event.payload && event.payload.payment && event.payload.payment.entity;
-        if (payment && typeof payment.order_id === 'string') store.markPaymentFailed({ razorpayOrderId: payment.order_id, razorpayPaymentId: payment.id });
+        if (payment && typeof payment.order_id === 'string') await store.markPaymentFailed({ razorpayOrderId: payment.order_id, razorpayPaymentId: payment.id });
       }
       // order.paid and unknown events are intentionally acknowledged. Only a
       // captured payment is allowed to create a booking.
@@ -308,7 +309,7 @@ const routes = {
         console.error('Razorpay returned an unexpected order for the requested price.');
         return sendJSON(res, 502, { error: 'Unable to create payment order. Please try again.' });
       }
-      const pending = store.createPendingPayment({
+      const pending = await store.createPendingPayment({
         razorpayOrderId: order.id,
         amountPaise: price.amountPaise,
         currency: price.currency,
@@ -352,9 +353,9 @@ const routes = {
         console.warn('Rejected mismatched Razorpay payment for order', orderId);
         return sendJSON(res, 400, { error: 'Payment does not match this booking.' });
       }
-      const result = reconcileCapturedPayment({ store, payment });
+      const result = await reconcileCapturedPayment({ store, payment });
       if (result.error) return sendJSON(res, 409, { error: result.error });
-      broadcast('state', store.getPublicState());
+      broadcast('state', await store.getPublicState());
       sendJSON(res, 200, { ok: true, booking: result.booking, duplicate: Boolean(result.duplicate) });
     } catch (err) {
       console.error('Razorpay payment verification failed:', err.message);
@@ -365,7 +366,7 @@ const routes = {
   'POST /api/payment/test-pending': async (req, res) => {
     if (process.env.NODE_ENV !== 'test') return sendJSON(res, 404, { error: 'Unknown endpoint' });
     const body = await readBody(req);
-    const result = store.createPendingPayment({
+    const result = await store.createPendingPayment({
       razorpayOrderId: body.razorpayOrderId,
       amountPaise: body.amountPaise,
       currency: body.currency || 'INR',
@@ -374,7 +375,7 @@ const routes = {
     if (result.error) return sendJSON(res, 400, { error: result.error });
     sendJSON(res, 200, { ok: true });
   },
-  'GET /api/state': async (req, res) => sendJSON(res, 200, store.getPublicState()),
+  'GET /api/state': async (req, res) => sendJSON(res, 200, await store.getPublicState()),
 
   'POST /api/book': async (req, res) => {
     // The legacy endpoint is retained only for the isolated test suite. It is
@@ -382,9 +383,9 @@ const routes = {
     // verified Razorpay payment.
     if (process.env.NODE_ENV === 'test' && process.env.PAUSENPLAY_TEST_ALLOW_UNPAID_BOOKINGS === '1') {
       const body = await readBody(req);
-      const result = store.createBooking({ ...body, createdBy: 'customer' });
+      const result = await store.createBooking({ ...body, createdBy: 'customer' });
       if (result.error) return sendJSON(res, 400, { error: result.error });
-      broadcast('state', store.getPublicState());
+      broadcast('state', await store.getPublicState());
       return sendJSON(res, 200, { ok: true, booking: result.booking });
     }
     sendJSON(res, 410, { error: 'Complete payment before creating a customer booking.' });
@@ -424,19 +425,19 @@ const routes = {
   /* ---------------- admin data ---------------- */
   'GET /api/admin/state': async (req, res) => {
     if (!adminFrom(req, res)) return sendJSON(res, 401, { error: 'Not signed in.' });
-    const pub = store.getPublicState();
+    const pub = await store.getPublicState();
     sendJSON(res, 200, {
       ...pub,
-      bookings: store.listBookings({ limit: 500 }),
-      upcomingBookings: store.listUpcoming(),
-      stats: buildStats()
+      bookings: await store.listBookings({ limit: 500 }),
+      upcomingBookings: await store.listUpcoming(),
+      stats: await buildStats()
     });
   },
 
   'POST /api/admin/layout': async (req, res) => {
     if (!adminFrom(req, res)) return sendJSON(res, 401, { error: 'Not signed in.' });
     const body = await readBody(req);
-    const result = store.updateLayout({ seats: body.seats, layout: body.layout });
+    const result = await store.updateLayout({ seats: body.seats, layout: body.layout });
     if (result.error) return sendJSON(res, 400, { error: result.error });
     broadcast('state', store.getPublicState());
     sendJSON(res, 200, { ok: true, seats: result.seats, layout: result.layout });
@@ -445,9 +446,9 @@ const routes = {
   'POST /api/admin/pricing': async (req, res) => {
     if (!adminFrom(req, res)) return sendJSON(res, 401, { error: 'Not signed in.' });
     const body = await readBody(req);
-    const result = store.updateStationPricing({ seatId: body.seatId, hourlyRate: body.hourlyRate });
+    const result = await store.updateStationPricing({ seatId: body.seatId, hourlyRate: body.hourlyRate });
     if (result.error) return sendJSON(res, 400, { error: result.error });
-    broadcast('state', store.getPublicState());
+    broadcast('state', await store.getPublicState());
     sendJSON(res, 200, { ok: true, station: result.seat });
   },
 
@@ -474,7 +475,7 @@ const routes = {
       layout: { image: 'assets/' + file, width, height }
     });
     if (result.error) return sendJSON(res, 400, { error: result.error });
-    broadcast('state', store.getPublicState());
+    broadcast('state', await store.getPublicState());
     sendJSON(res, 200, { ok: true, image: result.layout.image, layout: result.layout });
   },
 
