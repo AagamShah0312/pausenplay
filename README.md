@@ -219,24 +219,11 @@ On first startup, the application creates only the missing state singleton and r
 It does not import legacy JSON data. Set `REPOSITORY_TYPE=json` only for local legacy/test use;
 there is no production fallback from MongoDB to JSON.
 
-## S3 layout-image storage
+## GridFS layout-image storage
 
-Uploaded floor-plan images are private S3 objects. MongoDB stores only the S3 key and image metadata;
-the application serves the current image through `/api/layout-image`. Configure:
-
-```env
-AWS_REGION=ap-south-1
-AWS_ACCESS_KEY_ID=...
-AWS_SECRET_ACCESS_KEY=...
-AWS_S3_BUCKET=your-private-bucket
-AWS_S3_LAYOUT_KEY=store-layout/current
-```
-
-The application can start without S3 credentials, but layout-image uploads return an error until S3 is
-configured. Grant the application identity only `s3:PutObject` and `s3:GetObject` for
-`arn:aws:s3:::your-private-bucket/store-layout/*`; do not make the bucket public. Every upload receives a
-generated application-owned key beneath the configured prefix, then MongoDB is updated after S3 confirms
-success. Old objects are retained, so a failed metadata update cannot replace the currently referenced image.
+Uploaded floor-plan images are stored as private MongoDB GridFS files (`fs.files` and `fs.chunks`). The
+state singleton stores only `layout.imageFileId`, MIME type, and dimensions; `/api/layout-image` streams
+the active file without exposing MongoDB configuration. No separate object-storage credentials are needed.
 
 ## Project layout
 

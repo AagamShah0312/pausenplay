@@ -293,36 +293,42 @@ const routes = {
     try {
       const body = await readBody(req);
       // Validation and conflict detection happen before a Razorpay order exists.
-      const check = store.validateBookingInput(body);
+      const stationIds = Array.isArray(body.stationIds) ? body.stationIds : [body.seatId];
+      if (!stationIds.length || stationIds.some(id => typeof id !== 'string') || new Set(stationIds).size !== stationIds.length) {
+        return sendJSON(res, 400, { error: 'Please choose one or more unique stations.' });
+      }
+      const check = store.validateBookingInput({ ...body, seatId: stationIds[0] });
       if (check.error) return sendJSON(res, 400, { error: check.error });
       if (!store.state.durations.includes(check.minutes)) {
         return sendJSON(res, 400, { error: 'That duration is not available.' });
       }
-      const price = getBookingPrice({ seatId: check.seat.id, minutes: check.minutes, hourlyRate: check.seat.hourlyRate });
-      if (price.error || !Number.isSafeInteger(price.amountPaise)) {
-        return sendJSON(res, 400, { error: price.error || 'Unable to price this booking.' });
+      const prices = stationIds.map(seatId => {
+        const seat = store.seatById(seatId);
+        return seat && getBookingPrice({ seatId, minutes: check.minutes, hourlyRate: seat.hourlyRate });
+      });
+      if (prices.some(price => !price || price.error || !Number.isSafeInteger(price.amountPaise))) {
+        return sendJSON(res, 400, { error: 'Unable to price one or more selected stations.' });
       }
+      const amountPaise = prices.reduce((sum, price) => sum + price.amountPaise, 0);
       const order = await razorpay.client.orders.create({
-        amount: price.amountPaise,
-        currency: price.currency,
+        amount: amountPaise,
+        currency: prices[0].currency,
         receipt: `pp_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`
       });
-      if (!order || !order.id || order.amount !== price.amountPaise || order.currency !== price.currency) {
+      if (!order || !order.id || order.amount !== amountPaise || order.currency !== prices[0].currency) {
         console.error('Razorpay returned an unexpected order for the requested price.');
         return sendJSON(res, 502, { error: 'Unable to create payment order. Please try again.' });
       }
       const pending = await store.createPendingPayment({
         razorpayOrderId: order.id,
-        amountPaise: price.amountPaise,
-        currency: price.currency,
-        hourlyRate: price.hourlyRate,
-        booking: body
+        amountPaise, currency: prices[0].currency, hourlyRate: prices[0].hourlyRate,
+        booking: { ...body, seatId: stationIds[0], stationIds }
       });
       if (pending.error) {
         console.error('Could not persist Razorpay order:', pending.error);
         return sendJSON(res, 500, { error: 'Unable to prepare payment. Please try again.' });
       }
-      sendJSON(res, 200, { ok: true, keyId: razorpay.keyId, order: { id: order.id, amount: price.amountPaise, currency: price.currency } });
+      sendJSON(res, 200, { ok: true, keyId: razorpay.keyId, order: { id: order.id, amount: amountPaise, currency: prices[0].currency }, prices });
     } catch (err) {
       console.error('Razorpay order creation failed:', err.message);
       sendJSON(res, 502, { error: 'Unable to create payment order. Please try again.' });
@@ -385,10 +391,12 @@ const routes = {
     // verified Razorpay payment.
     if (process.env.NODE_ENV === 'test' && process.env.PAUSENPLAY_TEST_ALLOW_UNPAID_BOOKINGS === '1') {
       const body = await readBody(req);
-      const result = await store.createBooking({ ...body, createdBy: 'customer' });
+      const result = Array.isArray(body.stationIds)
+        ? await store.createBookings({ ...body, createdBy: 'customer' })
+        : await store.createBooking({ ...body, createdBy: 'customer' });
       if (result.error) return sendJSON(res, 400, { error: result.error });
       broadcast('state', await store.getPublicState());
-      return sendJSON(res, 200, { ok: true, booking: result.booking });
+      return sendJSON(res, 200, { ok: true, booking: result.booking || result.bookings[0], bookings: result.bookings });
     }
     sendJSON(res, 410, { error: 'Complete payment before creating a customer booking.' });
   },
@@ -478,20 +486,23 @@ const routes = {
     const height = Number(body.height) || store.state.layout.height;
     const result = await store.updateLayout({
       seats: store.state.seats,
-      layout: { image: '/api/layout-image', imageKey: uploaded.key, imageContentType: uploaded.contentType, width, height }
+      layout: { image: 'api/layout-image', imageFileId: uploaded.fileId, imageContentType: uploaded.contentType, width, height }
     });
-    if (result.error) return sendJSON(res, 400, { error: result.error });
+    if (result.error) {
+      await layoutStorage.remove(uploaded.fileId).catch(() => {});
+      return sendJSON(res, 400, { error: result.error });
+    }
     broadcast('state', await store.getPublicState());
     sendJSON(res, 200, { ok: true, image: result.layout.image, layout: result.layout });
   },
 
   'GET /api/layout-image': async (req, res) => {
     const layout = store.state.layout || {};
-    if (!layout.imageKey) return sendJSON(res, 404, { error: 'No uploaded layout image is available.' });
+    if (!layout.imageFileId) return sendJSON(res, 404, { error: 'No uploaded layout image is available.' });
     try {
-      const image = await layoutStorage.get(layout.imageKey);
-      res.writeHead(200, { 'Content-Type': image.contentType, 'Content-Length': image.body.length, 'Cache-Control': 'no-store' });
-      res.end(image.body);
+      const image = await layoutStorage.get(layout.imageFileId);
+      res.writeHead(200, { 'Content-Type': image.contentType, 'Content-Length': image.length, 'Cache-Control': 'no-store' });
+      if (image.stream) image.stream.pipe(res); else res.end(image.body);
     } catch (err) {
       console.error('Layout image retrieval failed:', err.message);
       sendJSON(res, 404, { error: 'Layout image is unavailable.' });
@@ -691,19 +702,19 @@ function imageContentType(file) {
   return { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.gif': 'image/gif', '.svg': 'image/svg+xml' }[ext] || null;
 }
 
-/** Seed an S3-backed layout once, only when production S3 is configured. */
-async function ensureS3Layout() {
-  if (process.env.LAYOUT_STORAGE_TYPE === 'memory' || !layoutStorage.isConfigured() || store.state.layout.imageKey) return;
+/** Migrate a legacy local layout into GridFS once. */
+async function ensureGridFsLayout() {
+  if (process.env.LAYOUT_STORAGE_TYPE === 'memory' || store.state.layout.imageFileId) return;
   const imagePath = safeJoin(ROOT, store.state.layout.image || '');
   const contentType = imagePath && imageContentType(imagePath);
   if (!imagePath || !contentType || !fs.existsSync(imagePath)) {
-    throw new Error('The current layout image cannot be seeded to S3.');
+    throw new Error('The current layout image cannot be migrated to GridFS.');
   }
   const uploaded = await layoutStorage.upload({ body: fs.readFileSync(imagePath), contentType });
   const result = await store.updateLayout({
     seats: store.state.seats,
     layout: {
-      image: 'api/layout-image', imageKey: uploaded.key, imageContentType: uploaded.contentType,
+      image: 'api/layout-image', imageFileId: uploaded.fileId, imageContentType: uploaded.contentType,
       width: store.state.layout.width, height: store.state.layout.height
     }
   });
@@ -714,7 +725,7 @@ async function start() {
   try {
     await store.initialize();
     await auth.initialize();
-    await ensureS3Layout();
+    await ensureGridFsLayout();
   } catch (err) {
     console.error('Store initialization failed:', err.message);
     process.exitCode = 1;

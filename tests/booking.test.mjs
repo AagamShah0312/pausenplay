@@ -91,6 +91,18 @@ describe('customer booking flow', () => {
     });
     assert.equal(body.booking.phone, '919876543210');
   });
+
+  test('multiple stations are booked together and duplicates are rejected', async () => {
+    const { body: state } = await srv.json('/api/state');
+    const seats = state.seats.filter(s => s.status === 'free').slice(0, 2);
+    const request = payload => srv.json('/api/book', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+    const { res, body } = await request({ stationIds: seats.map(s => s.id), name: 'Group Player', phone: '9876543299', minutes: 60 });
+    assert.equal(res.status, 200);
+    assert.equal(body.bookings.length, 2);
+    assert.equal(new Set(body.bookings.map(b => b.bookingGroupId)).size, 1);
+    const duplicate = await request({ stationIds: [seats[0].id, seats[0].id], name: 'Group Player', phone: '9876543299', minutes: 60 });
+    assert.equal(duplicate.res.status, 400);
+  });
 });
 
 describe('admin control of sessions', () => {

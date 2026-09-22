@@ -14,7 +14,8 @@
   var DEFAULT_TZ = 'Asia/Kolkata';
 
   var state = null;          // latest server state
-  var selectedSeat = null;   // seat id currently picked in the form
+  var selectedSeat = null;   // first selected station, retained for legacy helpers
+  var selectedSeats = [];
   var minutes = 60;          // chosen duration
   var whenMode = 'now';      // 'now' | 'later'
   var clockOffset = 0;       // server time - client time
@@ -283,7 +284,7 @@
         node.disabled = false;
       }
 
-      node.classList.toggle('selected', selectedSeat === seat.id);
+      node.classList.toggle('selected', selectedSeats.indexOf(seat.id) !== -1);
     });
 
     var free = state.seats.filter(function (s) { return s.status === 'free'; }).length;
@@ -476,7 +477,9 @@
       toast(seat.label + ' is booked right now — free at ' + fmtClock(seat.booking.endAt) +
         '. You can still reserve it for later.', 'err');
     }
-    selectedSeat = seatId;
+    var index = selectedSeats.indexOf(seatId);
+    if (index === -1) selectedSeats.push(seatId); else selectedSeats.splice(index, 1);
+    selectedSeat = selectedSeats[0] || null;
     renderSeats();
     if (el.picked) {
       el.picked.classList.remove('empty');
@@ -493,13 +496,13 @@
 
   function submitBooking(e) {
     e.preventDefault();
-    if (!selectedSeat) { toast('First, tap a station on the map.', 'err'); return; }
+    if (!selectedSeats.length) { toast('First, tap one or more stations on the map.', 'err'); return; }
     var name = (el.nameInput.value || '').trim();
     var phone = (el.phoneInput.value || '').trim();
     if (name.length < 2) { toast('Please enter your name.', 'err'); el.nameInput.focus(); return; }
     if (phone.replace(/\D/g, '').length < 10) { toast('Please enter a 10 digit phone number.', 'err'); el.phoneInput.focus(); return; }
 
-    var payload = { seatId: selectedSeat, name: name, phone: phone, minutes: minutes };
+    var payload = { seatId: selectedSeats[0], stationIds: selectedSeats, name: name, phone: phone, minutes: minutes };
     var w = chosenWindow();
     if (whenMode === 'later') {
       if (!w) { toast('Please pick the date and time you want to play.', 'err'); if (el.dateInput) el.dateInput.focus(); return; }
@@ -599,6 +602,7 @@
       $('pickedZone').textContent = '';
     }
     selectedSeat = null;
+    selectedSeats = [];
     renderSeats();
     updateSummary();
   }
