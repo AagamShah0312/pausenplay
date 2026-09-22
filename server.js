@@ -439,7 +439,7 @@ const routes = {
     const body = await readBody(req);
     const result = await store.updateLayout({ seats: body.seats, layout: body.layout });
     if (result.error) return sendJSON(res, 400, { error: result.error });
-    broadcast('state', store.getPublicState());
+    broadcast('state', await store.getPublicState());
     sendJSON(res, 200, { ok: true, seats: result.seats, layout: result.layout });
   },
 
@@ -470,7 +470,7 @@ const routes = {
 
     const width = Number(body.width) || store.state.layout.width;
     const height = Number(body.height) || store.state.layout.height;
-    const result = store.updateLayout({
+    const result = await store.updateLayout({
       seats: store.state.seats,
       layout: { image: 'assets/' + file, width, height }
     });
@@ -481,13 +481,13 @@ const routes = {
 
   'GET /api/admin/history': async (req, res) => {
     if (!adminFrom(req, res)) return sendJSON(res, 401, { error: 'Not signed in.' });
-    sendJSON(res, 200, { bookings: store.listBookings(), stats: buildStats() });
+    sendJSON(res, 200, { bookings: await store.listBookings(), stats: await buildStats() });
   },
 
   'POST /api/admin/book': async (req, res) => {
     if (!adminFrom(req, res)) return sendJSON(res, 401, { error: 'Not signed in.' });
     const body = await readBody(req);
-    const result = store.createBooking({
+    const result = await store.createBooking({
       seatId: body.seatId,
       name: body.name,
       phone: body.phone,
@@ -498,7 +498,7 @@ const routes = {
       createdBy: 'admin'
     });
     if (result.error) return sendJSON(res, 400, { error: result.error });
-    broadcast('state', store.getPublicState());
+    broadcast('state', await store.getPublicState());
     sendJSON(res, 200, { ok: true, booking: result.booking });
   },
 
@@ -506,35 +506,35 @@ const routes = {
   'POST /api/admin/start': async (req, res) => {
     if (!adminFrom(req, res)) return sendJSON(res, 401, { error: 'Not signed in.' });
     const body = await readBody(req);
-    const result = store.startBooking(body.bookingId, 'admin');
+    const result = await store.startBooking(body.bookingId, 'admin');
     if (result.error) return sendJSON(res, 400, { error: result.error });
-    broadcast('state', store.getPublicState());
+    broadcast('state', await store.getPublicState());
     sendJSON(res, 200, { ok: true, booking: result.booking });
   },
 
   'POST /api/admin/adjust': async (req, res) => {
     if (!adminFrom(req, res)) return sendJSON(res, 401, { error: 'Not signed in.' });
     const body = await readBody(req);
-    const result = store.adjustBooking(body.bookingId, body.deltaMinutes, 'admin');
+    const result = await store.adjustBooking(body.bookingId, body.deltaMinutes, 'admin');
     if (result.error) return sendJSON(res, 400, { error: result.error });
-    broadcast('state', store.getPublicState());
+    broadcast('state', await store.getPublicState());
     sendJSON(res, 200, { ok: true, booking: result.booking });
   },
 
   'POST /api/admin/end': async (req, res) => {
     if (!adminFrom(req, res)) return sendJSON(res, 401, { error: 'Not signed in.' });
     const body = await readBody(req);
-    const result = store.endBooking(body.bookingId, 'admin');
+    const result = await store.endBooking(body.bookingId, 'admin');
     if (result.error) return sendJSON(res, 400, { error: result.error });
-    broadcast('state', store.getPublicState());
+    broadcast('state', await store.getPublicState());
     sendJSON(res, 200, { ok: true, booking: result.booking });
   },
 
   'GET /api/export.xlsx': async (req, res) => {
     if (!adminFrom(req, res)) return sendJSON(res, 401, { error: 'Not signed in.' });
     const buf = xlsx.build([
-      { name: 'Bookings', rows: exportRows(), cols: [16, 12, 22, 22, 14, 20, 20, 10, 16, 16, 16, 20], autoFilter: true },
-      { name: 'Station summary', rows: exportSummaryRows(), cols: [34, 16, 16, 14] }
+      { name: 'Bookings', rows: await exportRows(), cols: [16, 12, 22, 22, 14, 20, 20, 10, 16, 16, 16, 20], autoFilter: true },
+      { name: 'Station summary', rows: await exportSummaryRows(), cols: [34, 16, 16, 14] }
     ]);
     const name = `pausenplay-bookings-${fmtFileStamp.format(new Date()).replace(/[^\d]/g, '').slice(0, 12)}.xlsx`;
     res.writeHead(200, {
@@ -548,7 +548,7 @@ const routes = {
 
   'GET /api/export.csv': async (req, res) => {
     if (!adminFrom(req, res)) return sendJSON(res, 401, { error: 'Not signed in.' });
-    const buf = Buffer.from(xlsx.buildCsv(exportRows()), 'utf8');
+    const buf = Buffer.from(xlsx.buildCsv(await exportRows()), 'utf8');
     res.writeHead(200, {
       'Content-Type': 'text/csv; charset=utf-8',
       'Content-Length': buf.length,
@@ -561,8 +561,8 @@ const routes = {
 
 const dayKey = new Intl.DateTimeFormat('en-CA', { timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit' });
 
-function buildStats() {
-  const all = store.listBookings();
+async function buildStats() {
+  const all = await store.listBookings();
   const t = Date.now();
   const today = dayKey.format(new Date());
   const todays = all.filter(b => dayKey.format(new Date(b.startAt)) === today);
@@ -620,7 +620,7 @@ const server = http.createServer(async (req, res) => {
   }
 
   /* --- SSE --- */
-  if (pathname === '/api/events') return handleEvents(req, res);
+  if (pathname === '/api/events') return await handleEvents(req, res);
 
   /* --- API --- */
   if (pathname.startsWith('/api/')) {
@@ -657,14 +657,33 @@ const server = http.createServer(async (req, res) => {
 });
 
 /* expire finished sessions + push updates to everyone watching */
-setInterval(() => {
-  if (store.sweepExpired()) broadcast('state', store.getPublicState());
-}, 1000);
+function startExpirySweep() {
+  setInterval(async () => {
+    try {
+      if (await store.sweepExpired()) broadcast('state', await store.getPublicState());
+    } catch (err) {
+      console.error('Booking expiry sweep failed:', err.message);
+    }
+  }, 1000);
+}
 
-server.listen(PORT, HOST, () => {
-  console.log('');
-  console.log('  PAUSENPLAY booking server');
-  console.log(`  Customer site : http://localhost:${PORT}/`);
-  console.log(`  Admin panel   : http://localhost:${PORT}/admin   (Admin / Admin123)`);
-  console.log('');
-});
+async function start() {
+  try {
+    await store.initialize();
+  } catch (err) {
+    console.error('Store initialization failed:', err.message);
+    process.exitCode = 1;
+    return;
+  }
+
+  server.listen(PORT, HOST, () => {
+    console.log('');
+    console.log('  PAUSENPLAY booking server');
+    console.log(`  Customer site : http://localhost:${PORT}/`);
+    console.log(`  Admin panel   : http://localhost:${PORT}/admin   (Admin / Admin123)`);
+    console.log('');
+  });
+  startExpirySweep();
+}
+
+start();

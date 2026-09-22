@@ -38,6 +38,7 @@ export async function startServer({ webhookSecret = 'test_webhook_secret' } = {}
       PORT: String(port),
       HOST: '127.0.0.1',
       NODE_ENV: 'test',
+      REPOSITORY_TYPE: 'json',
       PAUSENPLAY_TEST_ALLOW_UNPAID_BOOKINGS: '1',
       RAZORPAY_WEBHOOK_SECRET: webhookSecret,
       PAUSENPLAY_DATA_DIR: dataDir,

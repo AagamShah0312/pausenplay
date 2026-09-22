@@ -147,18 +147,21 @@ describe('the store moves reservations into running sessions', () => {
   before(async () => {
     dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pausenplay-sweep-'));
     process.env.PAUSENPLAY_DATA_DIR = dataDir;
+    process.env.REPOSITORY_TYPE = 'json';
     const require = createRequire(import.meta.url);
     store = require('../lib/store.js');
+    await store.initialize();
   });
 
   after(() => {
     delete process.env.PAUSENPLAY_DATA_DIR;
+    delete process.env.REPOSITORY_TYPE;
     fs.rmSync(dataDir, { recursive: true, force: true });
   });
 
-  test('a slot whose time has come flips to active on the next sweep', () => {
+  test('a slot whose time has come flips to active on the next sweep', async () => {
     const seat = store.state.seats[0];
-    const made = store.createBooking({
+    const made = await store.createBooking({
       seatId: seat.id, name: 'Sweep Me', phone: '9000000099',
       minutes: 30, startAt: Date.now() + 3 * 3600000, createdBy: 'customer'
     });
@@ -166,28 +169,35 @@ describe('the store moves reservations into running sessions', () => {
     const id = made.booking.id;
 
     // pretend the clock moved on
-    const b = store.bookings.find(x => x.id === id);
+    const persisted = JSON.parse(fs.readFileSync(store.BOOKINGS_FILE, 'utf8'));
+    const b = persisted.find(x => x.id === id);
     b.startAt = Date.now() - 1000;
     b.endAt = b.startAt + 30 * 60000;
+    fs.writeFileSync(store.BOOKINGS_FILE, JSON.stringify(persisted, null, 2));
+    await store.initialize();
 
-    assert.equal(store.sweepExpired(), true, 'the sweep should report a change');
-    assert.equal(b.status, 'active');
-    assert.ok(b.startedAt > 0, 'startedAt is stamped when the session opens');
+    assert.equal(await store.sweepExpired(), true, 'the sweep should report a change');
+    const updated = (await store.listBookings()).find(x => x.id === id);
+    assert.equal(updated.status, 'active');
+    assert.ok(updated.startedAt > 0, 'startedAt is stamped when the session opens');
     assert.equal(store.activeBookingFor(seat.id).id, id, 'the station is occupied from now on');
   });
 
-  test('a slot that passed completely is marked missed', () => {
+  test('a slot that passed completely is marked missed', async () => {
     const seat = store.state.seats[1];
-    const made = store.createBooking({
+    const made = await store.createBooking({
       seatId: seat.id, name: 'No Show', phone: '9000000098',
       minutes: 30, startAt: Date.now() + 3 * 3600000, createdBy: 'customer'
     });
-    const b = store.bookings.find(x => x.id === made.booking.id);
+    const persisted = JSON.parse(fs.readFileSync(store.BOOKINGS_FILE, 'utf8'));
+    const b = persisted.find(x => x.id === made.booking.id);
     b.startAt = Date.now() - 2 * 3600000;
     b.endAt = b.startAt + 30 * 60000;
+    fs.writeFileSync(store.BOOKINGS_FILE, JSON.stringify(persisted, null, 2));
+    await store.initialize();
 
-    store.sweepExpired();
-    assert.equal(b.status, 'expired');
+    await store.sweepExpired();
+    assert.equal((await store.listBookings()).find(x => x.id === made.booking.id).status, 'expired');
     assert.equal(store.activeBookingFor(seat.id), null, 'the station is free again');
   });
 });

@@ -216,9 +216,9 @@ station coordinates, so it stays sharp on any screen.
 `data/` is git-ignored and recreated automatically on the first run (with the default
 `Admin` / `Admin123` credentials). Delete the folder to reset everything.
 
-## MongoDB Atlas migration
+## MongoDB persistence
 
-MongoDB support uses the official Node.js driver and the `state`, `bookings`, and `payments`
+MongoDB is the production persistence layer and uses the `state`, `bookings`, and `payments`
 collections. Configure these values locally (never commit `.env`):
 
 ```env
@@ -226,21 +226,15 @@ MONGODB_URI=your_mongodb_atlas_connection_string
 MONGODB_DB_NAME=pausenplay
 ```
 
-Before switching a deployment, preserve the JSON files and run:
-
-```powershell
-node scripts/migrate-json-to-mongodb.mjs
-```
-
-The migration upserts the singleton state document and inserts bookings/payments by their existing
-application identifiers, so it can be rerun safely. Verify the migrated records in Atlas before
-removing or changing any local JSON data.
+On first startup, the application creates only the missing state singleton and required indexes.
+It does not import legacy JSON data. Set `REPOSITORY_TYPE=json` only for local legacy/test use;
+there is no production fallback from MongoDB to JSON.
 
 ## Project layout
 
 ```
 server.js              HTTP server, API, SSE live updates, Excel export
-lib/store.js           bookings, stations, expiry sweeper (JSON file storage)
+lib/store.js           bookings, stations, expiry sweeper (repository-backed)
 lib/auth.js            admin login, scrypt password hashing, sessions
 lib/xlsx.js            dependency-free .xlsx / CSV writer
 public/index.html      the customer site (existing design + booking section)

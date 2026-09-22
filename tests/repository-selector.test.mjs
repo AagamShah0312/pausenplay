@@ -4,10 +4,11 @@ import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
 
-test('repository selection defaults to the synchronous JSON adapter', () => {
+test('repository selection defaults to the MongoDB adapter; JSON is explicit for local tests', () => {
   const { getRepository } = require('../lib/repository-selector.js');
   const repository = getRepository('json');
   ['getState', 'getBookings', 'getPayments', 'save'].forEach(name => assert.equal(typeof repository[name], 'function'));
+  assert.equal(getRepository(), require('../lib/mongodb-repository.js'));
   assert.throws(() => getRepository('unknown'), /Unknown repository type/);
 });
 
