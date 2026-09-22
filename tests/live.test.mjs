@@ -172,7 +172,7 @@ describe('live updates & layout editor', () => {
       body: JSON.stringify({ name: 'my store plan.png', data: 'data:image/png;base64,' + png, width: 1200, height: 800 })
     });
     assert.equal(res.status, 200);
-    assert.match(body.image, /^assets\/store-layout-\w+\.png$/);
+    assert.equal(body.image, 'api/layout-image');
 
     // the image is served and used by the public state
     const img = await srv.req('/' + body.image);
@@ -192,6 +192,24 @@ describe('live updates & layout editor', () => {
         body: JSON.stringify({ ...bad, width: 10, height: 10 })
       });
       assert.equal(r.res.status, 400, 'should reject ' + bad.data.slice(0, 24));
+    }
+  });
+
+  test('a failed image replacement keeps the existing layout reference', async () => {
+    const failedSrv = await startServer({ layoutUploadFails: true });
+    try {
+      const failedCookie = (await login(failedSrv)).cookie;
+      const { body: before } = await failedSrv.json('/api/state');
+      const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==';
+      const response = await failedSrv.json('/api/admin/layout-image', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', cookie: failedCookie },
+        body: JSON.stringify({ data: 'data:image/png;base64,' + png, width: 1200, height: 800 })
+      });
+      assert.equal(response.res.status, 502);
+      const { body: after } = await failedSrv.json('/api/state');
+      assert.deepEqual(after.layout, before.layout);
+    } finally {
+      await failedSrv.stop();
     }
   });
 });

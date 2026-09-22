@@ -26,6 +26,7 @@ const path = require('path');
 const { ASSETS_DIR } = require('./lib/paths');
 const store = require('./lib/store');
 const auth = require('./lib/auth');
+const { getLayoutStorage } = require('./lib/layout-storage');
 const xlsx = require('./lib/xlsx');
 const razorpay = require('./lib/razorpay');
 const { getBookingPrice } = require('./lib/pricing');
@@ -36,6 +37,7 @@ const PUBLIC_DIR = path.join(ROOT, 'public');
 const PORT = Number(process.env.PORT || 3000);
 const HOST = process.env.HOST || '0.0.0.0';
 const TZ = process.env.TZ_NAME || 'Asia/Kolkata';
+const layoutStorage = getLayoutStorage();
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -416,7 +418,7 @@ const routes = {
   'POST /api/admin/credentials': async (req, res) => {
     if (!adminFrom(req, res)) return sendJSON(res, 401, { error: 'Not signed in.' });
     const body = await readBody(req);
-    const result = auth.changeCredentials(body);
+    const result = await auth.changeCredentials(body);
     if (result.error) return sendJSON(res, 400, { error: result.error });
     res.setHeader('Set-Cookie', `${ADMIN_COOKIE}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax`);
     sendJSON(res, 200, { ok: true, ...result, message: 'Saved. Please sign in again with your new credentials.' });
@@ -455,7 +457,6 @@ const routes = {
   'POST /api/admin/layout-image': async (req, res) => {
     if (!adminFrom(req, res)) return sendJSON(res, 401, { error: 'Not signed in.' });
     const body = await readBody(req, 16 * 1024 * 1024);
-    const name = String(body.name || 'floor-plan').toLowerCase().replace(/[^a-z0-9._-]/g, '-').replace(/-+/g, '-');
     const dataUrl = String(body.data || '');
     const match = dataUrl.match(/^data:image\/(png|jpe?g|webp|gif|svg\+xml);base64,([A-Za-z0-9+/=]+)$/);
     if (!match) return sendJSON(res, 400, { error: 'That file is not a supported image (PNG, JPG, WEBP or SVG).' });
@@ -464,19 +465,37 @@ const routes = {
     if (buf.length > 8 * 1024 * 1024) return sendJSON(res, 400, { error: 'Image is larger than 8 MB.' });
     if (buf.length < 32) return sendJSON(res, 400, { error: 'That image looks empty.' });
 
-    const ext = match[1] === 'jpeg' ? 'jpg' : match[1] === 'svg+xml' ? 'svg' : match[1];
-    const file = `store-layout-${Date.now().toString(36)}.${ext}`;
-    fs.writeFileSync(path.join(ASSETS_DIR, file), buf);
+    const contentType = match[1] === 'jpg' || match[1] === 'jpeg' ? 'image/jpeg' : `image/${match[1]}`;
+    let uploaded;
+    try {
+      uploaded = await layoutStorage.upload({ body: buf, contentType });
+    } catch (err) {
+      console.error('Layout image upload failed:', err.message);
+      return sendJSON(res, 502, { error: 'Unable to store the layout image. Please try again.' });
+    }
 
     const width = Number(body.width) || store.state.layout.width;
     const height = Number(body.height) || store.state.layout.height;
     const result = await store.updateLayout({
       seats: store.state.seats,
-      layout: { image: 'assets/' + file, width, height }
+      layout: { image: '/api/layout-image', imageKey: uploaded.key, imageContentType: uploaded.contentType, width, height }
     });
     if (result.error) return sendJSON(res, 400, { error: result.error });
     broadcast('state', await store.getPublicState());
     sendJSON(res, 200, { ok: true, image: result.layout.image, layout: result.layout });
+  },
+
+  'GET /api/layout-image': async (req, res) => {
+    const layout = store.state.layout || {};
+    if (!layout.imageKey) return sendJSON(res, 404, { error: 'No uploaded layout image is available.' });
+    try {
+      const image = await layoutStorage.get(layout.imageKey);
+      res.writeHead(200, { 'Content-Type': image.contentType, 'Content-Length': image.body.length, 'Cache-Control': 'no-store' });
+      res.end(image.body);
+    } catch (err) {
+      console.error('Layout image retrieval failed:', err.message);
+      sendJSON(res, 404, { error: 'Layout image is unavailable.' });
+    }
   },
 
   'GET /api/admin/history': async (req, res) => {
@@ -667,9 +686,35 @@ function startExpirySweep() {
   }, 1000);
 }
 
+function imageContentType(file) {
+  const ext = path.extname(file).toLowerCase();
+  return { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.gif': 'image/gif', '.svg': 'image/svg+xml' }[ext] || null;
+}
+
+/** Seed an S3-backed layout once, only when production S3 is configured. */
+async function ensureS3Layout() {
+  if (process.env.LAYOUT_STORAGE_TYPE === 'memory' || !layoutStorage.isConfigured() || store.state.layout.imageKey) return;
+  const imagePath = safeJoin(ROOT, store.state.layout.image || '');
+  const contentType = imagePath && imageContentType(imagePath);
+  if (!imagePath || !contentType || !fs.existsSync(imagePath)) {
+    throw new Error('The current layout image cannot be seeded to S3.');
+  }
+  const uploaded = await layoutStorage.upload({ body: fs.readFileSync(imagePath), contentType });
+  const result = await store.updateLayout({
+    seats: store.state.seats,
+    layout: {
+      image: 'api/layout-image', imageKey: uploaded.key, imageContentType: uploaded.contentType,
+      width: store.state.layout.width, height: store.state.layout.height
+    }
+  });
+  if (result.error) throw new Error(result.error);
+}
+
 async function start() {
   try {
     await store.initialize();
+    await auth.initialize();
+    await ensureS3Layout();
   } catch (err) {
     console.error('Store initialization failed:', err.message);
     process.exitCode = 1;

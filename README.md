@@ -33,7 +33,7 @@ use docker compose --profile dev down to delete containers also -->
 
 Both can be changed after signing in: **Settings → Save credentials** (you must type the
 current password). Saving signs you out everywhere, so you log back in with the new details.
-The password is stored as a salted scrypt hash in `data/auth.json` — never in plain text.
+The password is stored as a salted scrypt hash in MongoDB — never in plain text.
 
 ---
 
@@ -205,20 +205,9 @@ station coordinates, so it stays sharp on any screen.
 
 ---
 
-## Where data is stored
-
-| File | Contents |
-| --- | --- |
-| `data/state.json` | floor plan, station list, durations |
-| `data/bookings.json` | every booking (live + history) |
-| `data/auth.json` | admin username + salted password hash |
-
-`data/` is git-ignored and recreated automatically on the first run (with the default
-`Admin` / `Admin123` credentials). Delete the folder to reset everything.
-
 ## MongoDB persistence
 
-MongoDB is the production persistence layer and uses the `state`, `bookings`, and `payments`
+MongoDB is the production persistence layer and uses the `state`, `bookings`, `payments`, and `auth`
 collections. Configure these values locally (never commit `.env`):
 
 ```env
@@ -230,12 +219,31 @@ On first startup, the application creates only the missing state singleton and r
 It does not import legacy JSON data. Set `REPOSITORY_TYPE=json` only for local legacy/test use;
 there is no production fallback from MongoDB to JSON.
 
+## S3 layout-image storage
+
+Uploaded floor-plan images are private S3 objects. MongoDB stores only the S3 key and image metadata;
+the application serves the current image through `/api/layout-image`. Configure:
+
+```env
+AWS_REGION=ap-south-1
+AWS_ACCESS_KEY_ID=...
+AWS_SECRET_ACCESS_KEY=...
+AWS_S3_BUCKET=your-private-bucket
+AWS_S3_LAYOUT_KEY=store-layout/current
+```
+
+The application can start without S3 credentials, but layout-image uploads return an error until S3 is
+configured. Grant the application identity only `s3:PutObject` and `s3:GetObject` for
+`arn:aws:s3:::your-private-bucket/store-layout/*`; do not make the bucket public. Every upload receives a
+generated application-owned key beneath the configured prefix, then MongoDB is updated after S3 confirms
+success. Old objects are retained, so a failed metadata update cannot replace the currently referenced image.
+
 ## Project layout
 
 ```
 server.js              HTTP server, API, SSE live updates, Excel export
 lib/store.js           bookings, stations, expiry sweeper (repository-backed)
-lib/auth.js            admin login, scrypt password hashing, sessions
+lib/auth.js            admin login, scrypt password hashing, Mongo-backed credentials
 lib/xlsx.js            dependency-free .xlsx / CSV writer
 public/index.html      the customer site (existing design + booking section)
 public/admin.html      admin console markup

@@ -34,7 +34,7 @@ describe('admin authentication', () => {
       const res = await srv.req(p);
       assert.equal(res.status, 401, p + ' must require a session');
     }
-    for (const p of ['/api/admin/adjust', '/api/admin/end', '/api/admin/book', '/api/admin/layout', '/api/admin/credentials']) {
+    for (const p of ['/api/admin/adjust', '/api/admin/end', '/api/admin/book', '/api/admin/layout', '/api/admin/layout-image', '/api/admin/credentials']) {
       const res = await srv.req(p, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}'
       });

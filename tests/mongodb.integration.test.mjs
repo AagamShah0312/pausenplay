@@ -49,6 +49,17 @@ test('MongoDB initializes fresh state and atomically rejects overlapping booking
     assert.equal((await repository.getBookings([]))[0].payment.amountPaise, 10500);
     assert.equal((await repository.getBookings([]))[0].payment.hourlyRate, 70, 'historical price snapshot persists');
     assert.equal((await repository.getPayments([]))[0].razorpayPaymentId, 'pay-one');
+
+    process.env.AUTH_STORAGE_TYPE = 'mongodb';
+    const { getAuthStorage } = require('../lib/auth-storage.js');
+    const authStorage = getAuthStorage();
+    const authDefault = { username: 'Admin', salt: 'test-salt', hash: 'hashed-password', usingDefault: true, updatedAt: Date.now() };
+    assert.deepEqual(await authStorage.initialize(authDefault), authDefault, 'missing auth singleton is initialized');
+    await authStorage.save({ ...authDefault, username: 'Manager', hash: 'changed-hash', usingDefault: false });
+    const persistedAuth = await authStorage.initialize(authDefault);
+    assert.equal(persistedAuth.username, 'Manager');
+    assert.equal(persistedAuth.hash, 'changed-hash');
+    assert.equal(Object.hasOwn(persistedAuth, 'password'), false, 'plaintext passwords are never persisted');
   } finally {
     await closeMongo();
   }
