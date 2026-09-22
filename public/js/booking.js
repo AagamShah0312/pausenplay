@@ -463,9 +463,17 @@
     $('summaryDuration').textContent = fmtDuration(minutes);
     var seat = selectedStation();
     $('summaryRate').textContent = seat ? fmtPrice(seat.hourlyRate) + '/hour' : 'Pick a station';
+    var selected = state ? state.seats.filter(function (item) { return selectedSeats.indexOf(item.id) !== -1; }) : [];
+    if (selected.length > 1) {
+      var total = selected.reduce(function (sum, item) { return sum + item.hourlyRate * minutes / 60; }, 0);
+      $('summaryRate').textContent = selected.map(function (item) { return item.label + ' ' + fmtPrice(item.hourlyRate * minutes / 60); }).join(' · ');
+      $('summaryPrice').textContent = fmtPrice(total);
+    }
     $('summaryPrice').textContent = seat ? fmtPrice(seat.hourlyRate * minutes / 60) : '—';
     var btn = $('bookSubmit');
-    if (btn) btn.textContent = whenMode === 'later' ? 'RESERVE MY STATION' : 'LOCK IN MY SEAT';
+    if (btn) btn.textContent = whenMode === 'later'
+      ? (selectedSeats.length > 1 ? 'RESERVE MY STATIONS' : 'RESERVE MY STATION')
+      : (selectedSeats.length > 1 ? 'LOCK IN MY SEATS' : 'LOCK IN MY SEAT');
     refreshSlotNote();
   }
 
@@ -483,8 +491,9 @@
     renderSeats();
     if (el.picked) {
       el.picked.classList.remove('empty');
-      $('pickedSeat').textContent = seat.label;
-      $('pickedZone').textContent = seat.zone;
+      $('pickedSeat').textContent = selectedSeats.length ? selectedSeats.map(function (id) { return state.seats.filter(function (item) { return item.id === id; })[0].label; }).join(', ') : 'No station picked';
+      $('pickedZone').textContent = selectedSeats.length > 1 ? selectedSeats.length + ' stations selected' : seat.zone;
+      if ($('pickedLabel')) $('pickedLabel').textContent = selectedSeats.length > 1 ? 'Selected stations' : 'Selected station';
     }
     updateSummary();
     var section = document.getElementById('book');
@@ -509,7 +518,7 @@
       payload.date = w.date;
       payload.time = w.time;
     } else {
-      var chosen = state ? state.seats.filter(function (s) { return s.id === selectedSeat; })[0] : null;
+      var chosen = state ? state.seats.filter(function (s) { return selectedSeats.indexOf(s.id) !== -1 && s.status === 'busy'; })[0] : null;
       if (chosen && chosen.status === 'busy') {
         toast(chosen.label + ' is in play until ' + fmtClock(chosen.booking.endAt) +
           ' — switch to "Pick date & time" to reserve it for later.', 'err');
@@ -548,7 +557,7 @@
                 var b = verified.d.booking;
                 var seat = state.seats.filter(function (s) { return s.id === b.seatId; })[0];
                 saveSession({ id: b.id, seatId: b.seatId, seatLabel: seat ? seat.label : b.seatId, name: b.name, startAt: b.startAt, endAt: b.endAt, status: b.status, createdAt: serverNow() });
-                selectedSeat = null; showDone(b, seat); renderMySession(); fetchState();
+                selectedSeat = null; selectedSeats = []; showDone(b, seat); renderMySession(); fetchState();
                 toast(b.status === 'scheduled' ? 'Reserved! ' + (seat ? seat.label : '') + ' is yours ' + fmtWhen(b.startAt) + '.' : 'Booked! ' + (seat ? seat.label : '') + ' is yours for ' + fmtDuration(b.durationMin) + '.', 'ok');
               })
               .catch(function () { btn.disabled = false; updateSummary(); toast('Network problem while verifying payment. Contact the lounge if you were charged.', 'err'); });

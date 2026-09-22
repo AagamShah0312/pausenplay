@@ -25,6 +25,10 @@ test('MongoDB initializes fresh state and atomically rejects overlapping booking
 
   try {
     await repository.initialize();
+    const { collections } = require('../lib/mongodb.js');
+    const paymentIdIndex = (await (await collections()).payments.listIndexes().toArray()).find(index => index.name === 'razorpayPaymentId_1');
+    assert.equal(paymentIdIndex.unique, true);
+    assert.deepEqual(paymentIdIndex.partialFilterExpression, { razorpayPaymentId: { $type: 'string' } });
     const state = await repository.getState(defaultState);
     assert.equal(state.seats[0].hourlyRate, 50, 'missing state is initialized from defaults');
 

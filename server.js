@@ -299,6 +299,9 @@ const routes = {
       }
       const check = store.validateBookingInput({ ...body, seatId: stationIds[0] });
       if (check.error) return sendJSON(res, 400, { error: check.error });
+      const stationChecks = stationIds.map(seatId => store.validateBookingInput({ ...body, seatId }));
+      const unavailable = stationChecks.find(item => item.error);
+      if (unavailable) return sendJSON(res, 400, { error: unavailable.error });
       if (!store.state.durations.includes(check.minutes)) {
         return sendJSON(res, 400, { error: 'That duration is not available.' });
       }
