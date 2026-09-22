@@ -13,7 +13,7 @@ describe('pages & static files', () => {
     assert.match(res.headers.get('content-type'), /text\/html/);
     const html = await res.text();
     ['id="book"', 'id="storeMap"', 'id="bookForm"', 'id="playerName"', 'id="playerPhone"',
-      'id="durations"', 'id="mySession"', 'js/booking.js', 'css/booking.css']
+      'id="durations"', 'id="mySession"', 'js/booking.js', 'css/booking.css', 'js/pixel-cat.js', 'css/pixel-cat.css']
       .forEach(token => assert.ok(html.includes(token), `homepage missing ${token}`));
   });
 
@@ -23,7 +23,7 @@ describe('pages & static files', () => {
       assert.equal(res.status, 200, url + ' should be 200');
       const html = await res.text();
       ['id="loginForm"', 'id="adminMap"', 'id="activeBody"', 'id="historyBody"',
-        'id="exportXlsx"', 'id="credForm"', 'id="layoutEditor"']
+        'id="exportXlsx"', 'id="credForm"', 'id="layoutEditor"', 'js/pixel-cat.js', 'css/pixel-cat.css']
         .forEach(token => assert.ok(html.includes(token), `admin page missing ${token}`));
     }
   });
@@ -32,8 +32,10 @@ describe('pages & static files', () => {
     const files = {
       '/css/booking.css': /text\/css/,
       '/css/admin.css': /text\/css/,
+      '/css/pixel-cat.css': /text\/css/,
       '/js/booking.js': /javascript/,
       '/js/admin.js': /javascript/,
+      '/js/pixel-cat.js': /javascript/,
       '/assets/store-layout.svg': /image\/svg/
     };
     for (const [url, type] of Object.entries(files)) {

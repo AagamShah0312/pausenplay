@@ -1,0 +1,183 @@
+.pp-pixel-cat-root {
+  --pp-cat-size: clamp(88px, 12vw, 124px);
+  --pp-cat-orange: #ff7a1f;
+  --pp-cat-orange-dark: #d44f00;
+  --pp-cat-ink: #101010;
+  --pp-cat-light: #fff9eb;
+  position: fixed;
+  right: clamp(8px, 2vw, 22px);
+  bottom: clamp(8px, 2vw, 18px);
+  z-index: 850;
+  pointer-events: none;
+  max-width: calc(100vw - 16px);
+}
+
+.pp-pixel-cat-shell {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.pp-pixel-cat,
+.pp-pixel-cat-hide,
+.pp-pixel-cat-show {
+  pointer-events: auto;
+  font-family: 'Space Mono', monospace;
+}
+
+.pp-pixel-cat {
+  width: var(--pp-cat-size);
+  height: var(--pp-cat-size);
+  border: 0;
+  background: transparent;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  image-rendering: pixelated;
+  animation: pp-cat-float 2.6s ease-in-out infinite;
+}
+
+.pp-pixel-cat:focus-visible,
+.pp-pixel-cat-hide:focus-visible,
+.pp-pixel-cat-show:focus-visible {
+  outline: 2px solid #ffd27a;
+  outline-offset: 3px;
+}
+
+.pp-pixel-cat svg {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  filter: drop-shadow(0 6px 12px rgba(0, 0, 0, 0.35));
+}
+
+.pp-cat-pupils {
+  transform: translate(var(--pp-eye-x, 0px), var(--pp-eye-y, 0px));
+  transition: transform 70ms linear;
+}
+
+.pp-cat-eye-closed {
+  opacity: 0;
+}
+
+.pp-pixel-cat-root[data-blink='true'] .pp-cat-eye-open,
+.pp-pixel-cat-root[data-sleeping='true'] .pp-cat-eye-open {
+  opacity: 0;
+}
+
+.pp-pixel-cat-root[data-blink='true'] .pp-cat-eye-closed,
+.pp-pixel-cat-root[data-sleeping='true'] .pp-cat-eye-closed {
+  opacity: 1;
+}
+
+.pp-cat-zzz {
+  position: absolute;
+  right: calc(var(--pp-cat-size) * 0.08);
+  bottom: calc(var(--pp-cat-size) * 0.8);
+  font-family: 'Bebas Neue', sans-serif;
+  letter-spacing: 1px;
+  color: #ffd27a;
+  font-size: clamp(14px, 2.4vw, 20px);
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.45);
+  opacity: 0;
+  transform: translateY(2px);
+}
+
+.pp-pixel-cat-root[data-sleeping='true'] .pp-cat-zzz {
+  opacity: 0.9;
+  animation: pp-cat-zzz 1.4s ease-in-out infinite;
+}
+
+.pp-pixel-cat-hide {
+  border: 1px solid rgba(255, 122, 31, 0.45);
+  background: rgba(17, 17, 17, 0.88);
+  color: #ffd6a4;
+  border-radius: 999px;
+  font-size: 11px;
+  line-height: 1;
+  padding: 7px 10px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.pp-pixel-cat-show {
+  border: 1px solid rgba(255, 122, 31, 0.55);
+  background: rgba(17, 17, 17, 0.92);
+  color: #ffd6a4;
+  border-radius: 999px;
+  font-size: 11px;
+  line-height: 1;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+
+.pp-pixel-cat-root[data-hidden='true'] .pp-pixel-cat-shell {
+  display: none;
+}
+
+.pp-pixel-cat-root[data-hidden='true'] .pp-pixel-cat-show {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.pp-pixel-cat-root[data-state='typing'] .pp-pixel-cat {
+  animation: pp-cat-type 0.28s steps(2, end) infinite;
+}
+
+.pp-pixel-cat-root[data-state='happy'] .pp-pixel-cat {
+  animation: pp-cat-happy 0.55s ease-in-out infinite;
+}
+
+.pp-pixel-cat-root[data-sleeping='true'] .pp-pixel-cat {
+  animation: pp-cat-sleep 2.2s ease-in-out infinite;
+}
+
+.pp-pixel-cat-root[data-reduced-motion='true'] .pp-pixel-cat,
+.pp-pixel-cat-root[data-reduced-motion='true'] .pp-pixel-cat *,
+.pp-pixel-cat-root[data-reduced-motion='true'] .pp-cat-zzz {
+  animation: none !important;
+  transition: none !important;
+}
+
+.pp-pixel-cat-root[data-reduced-motion='true'] .pp-cat-pupils {
+  transform: translate(0, 0);
+}
+
+@media (max-width: 640px) {
+  .pp-pixel-cat-hide {
+    padding: 6px 9px;
+    font-size: 10px;
+  }
+}
+
+@keyframes pp-cat-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-5px); }
+}
+
+@keyframes pp-cat-type {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px) rotate(-1deg); }
+}
+
+@keyframes pp-cat-happy {
+  0%, 100% { transform: translateY(0) rotate(0); }
+  25% { transform: translateY(-6px) rotate(-3deg); }
+  75% { transform: translateY(-6px) rotate(3deg); }
+}
+
+@keyframes pp-cat-sleep {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(2px); }
+}
+
+@keyframes pp-cat-zzz {
+  0% { opacity: 0; transform: translateY(4px) scale(0.9); }
+  25% { opacity: 0.8; }
+  100% { opacity: 0; transform: translateY(-10px) scale(1.03); }
+}

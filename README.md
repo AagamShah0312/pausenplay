@@ -138,6 +138,22 @@ so do not hard-code it in the application or documentation.
 | 120 min | ₹100 |
 | 180 min | ₹150 |
 
+### Orange pixel cat widget
+
+An original lightweight orange pixel-cat widget now mounts globally on both `/` and `/admin`.
+It lives in:
+
+* `public/js/pixel-cat.js`
+* `public/css/pixel-cat.css`
+
+The widget is passive (no backend calls), reacts to pointer movement, clicks and typing, and
+falls asleep after inactivity. It supports reduced-motion preferences and includes keyboard
+activation/focus styles.
+
+To hide it, use the **Hide** button (a **Show cat** button stays on screen). To remove it
+completely, delete the `pixel-cat.css` / `pixel-cat.js` includes from `public/index.html` and
+`public/admin.html`.
+
 ## Admin side (`/admin`)
 
 * **Live floor** with the same green/red stations and countdowns.
