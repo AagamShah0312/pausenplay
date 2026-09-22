@@ -470,6 +470,9 @@
       $('summaryPrice').textContent = fmtPrice(total);
     }
     $('summaryPrice').textContent = seat ? fmtPrice(seat.hourlyRate * minutes / 60) : '—';
+    // Keep the group total as the final summary value; legacy single-seat code
+    // above intentionally remains for one-station compatibility.
+    if (selected.length > 1) $('summaryPrice').textContent = fmtPrice(selected.reduce(function (sum, item) { return sum + item.hourlyRate * minutes / 60; }, 0));
     var btn = $('bookSubmit');
     if (btn) btn.textContent = whenMode === 'later'
       ? (selectedSeats.length > 1 ? 'RESERVE MY STATIONS' : 'RESERVE MY STATION')
@@ -554,11 +557,13 @@
               .then(function (verified) {
                 btn.disabled = false; updateSummary();
                 if (!verified.ok) { toast(verified.d.error || 'Payment could not be verified.', 'err'); fetchState(); return; }
-                var b = verified.d.booking;
+                var group = verified.d.bookings || [verified.d.booking];
+                var b = group[0];
                 var seat = state.seats.filter(function (s) { return s.id === b.seatId; })[0];
-                saveSession({ id: b.id, seatId: b.seatId, seatLabel: seat ? seat.label : b.seatId, name: b.name, startAt: b.startAt, endAt: b.endAt, status: b.status, createdAt: serverNow() });
-                selectedSeat = null; selectedSeats = []; showDone(b, seat); renderMySession(); fetchState();
-                toast(b.status === 'scheduled' ? 'Reserved! ' + (seat ? seat.label : '') + ' is yours ' + fmtWhen(b.startAt) + '.' : 'Booked! ' + (seat ? seat.label : '') + ' is yours for ' + fmtDuration(b.durationMin) + '.', 'ok');
+                var labels = group.map(function (item) { var found = state.seats.filter(function (s) { return s.id === item.seatId; })[0]; return found ? found.label : item.seatId; });
+                saveSession({ id: b.id, bookingGroupId: verified.d.bookingGroupId || b.bookingGroupId || b.id, seatId: b.seatId, seatLabel: labels.join(' · '), stationLabels: labels, name: b.name, startAt: b.startAt, endAt: b.endAt, status: b.status, createdAt: serverNow() });
+                selectedSeat = null; selectedSeats = []; showDone(b, seat, group, verified.d.totalAmount); renderMySession(); fetchState();
+                toast(b.status === 'scheduled' ? 'Reserved! ' + labels.join(', ') + ' are yours ' + fmtWhen(b.startAt) + '.' : 'Booked! ' + labels.join(', ') + ' for ' + fmtDuration(b.durationMin) + '.', 'ok');
               })
               .catch(function () { btn.disabled = false; updateSummary(); toast('Network problem while verifying payment. Contact the lounge if you were charged.', 'err'); });
           },
@@ -574,22 +579,23 @@
       });
   }
 
-  function showDone(b, seat) {
+  function showDone(b, seat, group, totalAmount) {
     var form = $('bookForm');
     var done = $('bookDone');
     if (!form || !done) return;
     form.style.display = 'none';
     done.style.display = 'block';
     var title = $('doneTitle');
-    if (title) title.textContent = b.status === 'scheduled' ? 'STATION RESERVED' : 'YOU ARE IN';
+    if (title) title.textContent = b.status === 'scheduled' ? 'BOOKING CONFIRMED' : 'YOU ARE IN';
     var sub = $('doneSub');
     if (sub) {
       sub.textContent = b.status === 'scheduled'
         ? 'Be at the counter a few minutes before your slot'
         : 'Show this at the counter and start playing';
     }
-    $('doneSeat').textContent = seat ? seat.label : b.seatId;
-    $('doneZone').textContent = seat ? seat.zone : '';
+    group = group || [b];
+    $('doneSeat').textContent = group.map(function (item) { return item.seatLabel || item.seatId; }).join(' · ');
+    $('doneZone').textContent = group.length > 1 ? group.length + ' stations · Total ' + fmtPrice(totalAmount || 0) : (seat ? seat.zone : '');
     $('doneName').textContent = b.name;
     var startRow = $('doneStartRow');
     if (startRow) {

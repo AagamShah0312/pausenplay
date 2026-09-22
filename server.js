@@ -367,7 +367,7 @@ const routes = {
       const result = await reconcileCapturedPayment({ store, payment });
       if (result.error) return sendJSON(res, 409, { error: result.error });
       broadcast('state', await store.getPublicState());
-      sendJSON(res, 200, { ok: true, booking: result.booking, duplicate: Boolean(result.duplicate) });
+      sendJSON(res, 200, { ok: true, booking: result.booking, bookings: result.bookings || [result.booking], bookingGroupId: result.bookingGroupId || result.booking.bookingGroupId || result.booking.id, totalAmount: result.totalAmount || result.booking.payment.amount, duplicate: Boolean(result.duplicate) });
     } catch (err) {
       console.error('Razorpay payment verification failed:', err.message);
       sendJSON(res, 502, { error: 'Unable to verify payment. Please contact the lounge if you were charged.' });
