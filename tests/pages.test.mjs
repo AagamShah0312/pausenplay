@@ -13,7 +13,9 @@ describe('pages & static files', () => {
     assert.match(res.headers.get('content-type'), /text\/html/);
     const html = await res.text();
     ['id="book"', 'id="storeMap"', 'id="bookForm"', 'id="playerName"', 'id="playerPhone"',
-      'id="durations"', 'id="mySession"', 'js/booking.js', 'css/booking.css']
+      'id="durations"', 'id="mySession"', 'js/booking.js', 'css/booking.css',
+      'id="cat-widget"', 'id="cat-widget-btn"', 'id="cat-widget-canvas"', 'id="cat-speech"',
+      'Meow', 'Wanna play?', 'pausenplay_cat_widget_pos_v1', 'prefers-reduced-motion: reduce']
       .forEach(token => assert.ok(html.includes(token), `homepage missing ${token}`));
   });
 
