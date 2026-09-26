@@ -40,6 +40,94 @@ body { background:var(--dark); color:var(--white); font-family:'Space Mono',mono
   position:absolute; inset:0; pointer-events:none;
 }
 
+.cat-widget {
+  position: fixed;
+  left: 24px;
+  top: calc(100vh - 220px);
+  width: 180px;
+  height: 180px;
+  z-index: 120;
+  touch-action: none;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+
+.cat-widget.ready {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.cat-widget.dragging,
+.cat-widget.dragging * {
+  user-select: none;
+}
+
+.cat-widget-btn {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  cursor: grab;
+}
+
+.cat-widget.dragging .cat-widget-btn {
+  cursor: grabbing;
+}
+
+.cat-widget-btn:focus-visible {
+  outline: 2px solid var(--orange);
+  outline-offset: 2px;
+}
+
+#cat-widget-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+  image-rendering: pixelated;
+}
+
+.cat-speech {
+  position: absolute;
+  right: calc(100% + 10px);
+  bottom: 42px;
+  background: rgba(17, 17, 17, 0.95);
+  border: 1px solid rgba(255, 107, 0, 0.65);
+  border-radius: 10px;
+  color: var(--white);
+  font-size: 12px;
+  line-height: 1.2;
+  padding: 8px 10px;
+  min-width: 92px;
+  text-align: center;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.35);
+}
+
+.cat-speech[hidden] {
+  display: none;
+}
+
+.cat-sleep-indicator {
+  position: absolute;
+  right: 12px;
+  top: 10px;
+  color: var(--gold);
+  font-size: 13px;
+  letter-spacing: 1px;
+  text-shadow: 0 0 6px rgba(255, 215, 0, 0.45);
+}
+
+.cat-sleep-indicator[hidden] {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cat-speech {
+    transition: none;
+  }
+}
+
 /* --- SCRATCH OVERLAY --- */
 #scratch-overlay {
   position:absolute; inset:0; pointer-events:none; z-index:5;
@@ -574,13 +662,25 @@ footer { background:#000; padding:30px 80px; display:flex; align-items:center; j
   </div>
 </div>
 <div class="pp-toast" id="ppToast"></div>
+<div id="cat-widget" class="cat-widget">
+  <button
+    id="cat-widget-btn"
+    class="cat-widget-btn"
+    type="button"
+    aria-label="Orange pixel cat widget. You can drag it around and press to interact."
+  >
+    <canvas id="cat-widget-canvas" width="220" height="220" aria-hidden="true"></canvas>
+  </button>
+  <div id="cat-speech" class="cat-speech" role="status" aria-live="polite" aria-atomic="true" hidden></div>
+  <div id="cat-sleep-indicator" class="cat-sleep-indicator" aria-hidden="true" hidden>Zz</div>
+</div>
 
 <script>
 // ==========================================
 //  ANIMATED CAT — Canvas 2D drawing
 // ==========================================
 const canvas = document.getElementById('cat-stage');
-const ctx = canvas.getContext('2d');
+let ctx = canvas.getContext('2d');
 let W, H;
 
 function resize() {
@@ -632,7 +732,7 @@ const C = {
 };
 
 // ---- Draw the animated cat at (cx, cy), scale s ----
-function drawCat(cx, cy, s, arm, bob, tail, ear, walk) {
+function drawCat(cx, cy, s, arm, bob, tail, ear, walk, state = {}) {
   ctx.save();
   ctx.translate(cx, cy);
   ctx.scale(s, s);
@@ -958,6 +1058,25 @@ function drawCat(cx, cy, s, arm, bob, tail, ear, walk) {
   ctx.beginPath();
   ctx.ellipse(13, -8, 6, 3, -0.4, 0, Math.PI*2);
   ctx.fill();
+
+  const sleeping = !!state.sleeping;
+  const blinkLevel = Number(state.blinkLevel || 0);
+  if (sleeping || blinkLevel > 0.5) {
+    ctx.strokeStyle = 'rgba(255,255,255,0.95)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(-21, -2);
+    ctx.lineTo(-10, -2);
+    ctx.moveTo(10, -2);
+    ctx.lineTo(21, -2);
+    ctx.stroke();
+  } else {
+    ctx.fillStyle = 'rgba(255,255,255,0.85)';
+    ctx.beginPath();
+    ctx.ellipse(-15, -4, 2, 1.4, 0, 0, Math.PI*2);
+    ctx.ellipse(15, -4, 2, 1.4, 0, 0, Math.PI*2);
+    ctx.fill();
+  }
   ctx.restore();
 
   ctx.restore(); // end head
@@ -1147,6 +1266,8 @@ function endIntro() {
     intro.style.display = 'none';
     document.getElementById('main-site').style.opacity = '1';
     document.body.style.overflow = 'auto';
+    const widget = document.getElementById('cat-widget');
+    if (widget) widget.classList.add('ready');
     startRevealObserver();
   }, 600);
 }
@@ -1181,10 +1302,273 @@ document.querySelectorAll('a[href^="#"]').forEach(a => {
 });
 
 // ==========================================
+//  CAT WIDGET — interactive + draggable
+// ==========================================
+function initCatWidget() {
+  const widget = document.getElementById('cat-widget');
+  const button = document.getElementById('cat-widget-btn');
+  const speech = document.getElementById('cat-speech');
+  const sleepIndicator = document.getElementById('cat-sleep-indicator');
+  const widgetCanvas = document.getElementById('cat-widget-canvas');
+  if (!widget || !button || !speech || !sleepIndicator || !widgetCanvas) return;
+
+  const widgetCtx = widgetCanvas.getContext('2d');
+  if (!widgetCtx) return;
+
+  const MESSAGES = ['Meow', '♥', 'Wanna play?'];
+  const POSITION_KEY = 'pausenplay_cat_widget_pos_v1';
+  const motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+  const state = {
+    sleeping: false,
+    speaking: false,
+    dragging: false,
+    dragMoved: false,
+    dragPointerId: null,
+    dragOffsetX: 0,
+    dragOffsetY: 0,
+    x: 0,
+    y: 0,
+    rafId: 0,
+    blinkUntil: 0,
+    nextBlinkAt: performance.now() + 1400,
+    nextSleepAt: Date.now() + 15000,
+    messageTimer: 0,
+    hideSpeechTimer: 0,
+    suppressClickUntil: 0,
+    reducedMotion: motionQuery.matches,
+    lastInteractionAt: Date.now()
+  };
+
+  function clampPosition(x, y) {
+    const maxX = Math.max(0, window.innerWidth - widget.offsetWidth);
+    const maxY = Math.max(0, window.innerHeight - widget.offsetHeight);
+    return {
+      x: Math.max(0, Math.min(maxX, x)),
+      y: Math.max(0, Math.min(maxY, y))
+    };
+  }
+
+  function applyPosition(x, y) {
+    const next = clampPosition(x, y);
+    state.x = next.x;
+    state.y = next.y;
+    widget.style.left = `${next.x}px`;
+    widget.style.top = `${next.y}px`;
+  }
+
+  function savePosition() {
+    try {
+      localStorage.setItem(POSITION_KEY, JSON.stringify({ x: state.x, y: state.y }));
+    } catch {}
+  }
+
+  function loadPosition() {
+    try {
+      const raw = localStorage.getItem(POSITION_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (typeof parsed.x === 'number' && typeof parsed.y === 'number') {
+          return clampPosition(parsed.x, parsed.y);
+        }
+      }
+    } catch {}
+    return clampPosition(window.innerWidth - widget.offsetWidth - 24, window.innerHeight - widget.offsetHeight - 20);
+  }
+
+  function scheduleSleep() {
+    state.nextSleepAt = Date.now() + 15000 + Math.floor(Math.random() * 14000);
+  }
+
+  function wakeCat() {
+    state.sleeping = false;
+    state.lastInteractionAt = Date.now();
+    sleepIndicator.hidden = true;
+    scheduleSleep();
+  }
+
+  function showSpeechMessage(message) {
+    speech.textContent = message;
+    speech.hidden = false;
+  }
+
+  function hideSpeechMessage() {
+    speech.hidden = true;
+    speech.textContent = '';
+  }
+
+  function clearMessageTimers() {
+    clearTimeout(state.messageTimer);
+    clearTimeout(state.hideSpeechTimer);
+    state.messageTimer = 0;
+    state.hideSpeechTimer = 0;
+  }
+
+  function playMessageSequence() {
+    clearMessageTimers();
+    wakeCat();
+    state.speaking = true;
+    let idx = 0;
+    const step = () => {
+      showSpeechMessage(MESSAGES[idx]);
+      if (idx >= MESSAGES.length - 1) {
+        state.hideSpeechTimer = window.setTimeout(() => {
+          hideSpeechMessage();
+          state.speaking = false;
+        }, 900);
+        return;
+      }
+      idx += 1;
+      state.messageTimer = window.setTimeout(step, 650);
+    };
+    step();
+  }
+
+  function setSleeping(sleeping) {
+    state.sleeping = sleeping;
+    if (sleeping) {
+      sleepIndicator.hidden = false;
+      hideSpeechMessage();
+      state.speaking = false;
+      clearMessageTimers();
+    } else {
+      sleepIndicator.hidden = true;
+    }
+  }
+
+  function renderWidget(now) {
+    if (state.sleeping === false && !state.dragging && Date.now() > state.nextSleepAt) {
+      setSleeping(true);
+    }
+    if (now >= state.nextBlinkAt) {
+      state.blinkUntil = now + 120;
+      state.nextBlinkAt = now + (state.reducedMotion ? 4500 : 2200) + Math.random() * 3000;
+    }
+
+    const prevCtx = ctx;
+    ctx = widgetCtx;
+    ctx.clearRect(0, 0, widgetCanvas.width, widgetCanvas.height);
+
+    const time = now / 1000;
+    const bob = state.reducedMotion ? 0 : state.sleeping ? time * 0.9 : time * 4;
+    const tail = state.reducedMotion ? 0 : state.sleeping ? time * 0.5 : time * 3;
+    const ear = state.reducedMotion ? 0 : state.sleeping ? time * 0.6 : time * 2.1;
+    const walk = state.reducedMotion ? 0 : state.sleeping ? 0 : time * 6;
+    const arm = state.speaking && !state.reducedMotion ? (Math.sin(time * 10) + 1) * 0.2 : 0;
+
+    drawCat(
+      widgetCanvas.width / 2,
+      widgetCanvas.height / 2 + 16,
+      0.62,
+      arm,
+      bob,
+      tail,
+      ear,
+      walk,
+      { sleeping: state.sleeping, blinkLevel: now <= state.blinkUntil ? 1 : 0 }
+    );
+
+    ctx = prevCtx;
+    state.rafId = requestAnimationFrame(renderWidget);
+  }
+
+  function onPointerDown(ev) {
+    wakeCat();
+    state.dragging = true;
+    state.dragMoved = false;
+    state.dragPointerId = ev.pointerId;
+    state.dragOffsetX = ev.clientX - state.x;
+    state.dragOffsetY = ev.clientY - state.y;
+    widget.classList.add('dragging');
+    button.setPointerCapture(ev.pointerId);
+    ev.preventDefault();
+  }
+
+  function onPointerMove(ev) {
+    if (!state.dragging || ev.pointerId !== state.dragPointerId) return;
+    const nextX = ev.clientX - state.dragOffsetX;
+    const nextY = ev.clientY - state.dragOffsetY;
+    if (!state.dragMoved) {
+      const delta = Math.abs(nextX - state.x) + Math.abs(nextY - state.y);
+      state.dragMoved = delta > 4;
+    }
+    applyPosition(nextX, nextY);
+    state.lastInteractionAt = Date.now();
+    ev.preventDefault();
+  }
+
+  function endDrag(ev) {
+    if (!state.dragging || ev.pointerId !== state.dragPointerId) return;
+    state.dragging = false;
+    widget.classList.remove('dragging');
+    if (button.hasPointerCapture(ev.pointerId)) button.releasePointerCapture(ev.pointerId);
+    if (state.dragMoved) {
+      state.suppressClickUntil = performance.now() + 250;
+      savePosition();
+    }
+    scheduleSleep();
+  }
+
+  function onWidgetClick() {
+    if (performance.now() < state.suppressClickUntil) return;
+    playMessageSequence();
+  }
+
+  function onActivityKeydown(ev) {
+    if (ev.defaultPrevented || ev.ctrlKey || ev.altKey || ev.metaKey) return;
+    wakeCat();
+  }
+
+  function onActivityPointerDown() {
+    wakeCat();
+  }
+
+  function onMotionPrefChange(ev) {
+    state.reducedMotion = ev.matches;
+  }
+
+  function onResize() {
+    applyPosition(state.x, state.y);
+  }
+
+  function cleanup() {
+    cancelAnimationFrame(state.rafId);
+    clearMessageTimers();
+    button.removeEventListener('pointerdown', onPointerDown);
+    button.removeEventListener('pointermove', onPointerMove);
+    button.removeEventListener('pointerup', endDrag);
+    button.removeEventListener('pointercancel', endDrag);
+    button.removeEventListener('click', onWidgetClick);
+    window.removeEventListener('pointerdown', onActivityPointerDown, true);
+    window.removeEventListener('keydown', onActivityKeydown, true);
+    window.removeEventListener('resize', onResize);
+    motionQuery.removeEventListener('change', onMotionPrefChange);
+    window.removeEventListener('pagehide', cleanup);
+  }
+
+  const loaded = loadPosition();
+  applyPosition(loaded.x, loaded.y);
+  scheduleSleep();
+  button.addEventListener('pointerdown', onPointerDown);
+  button.addEventListener('pointermove', onPointerMove);
+  button.addEventListener('pointerup', endDrag);
+  button.addEventListener('pointercancel', endDrag);
+  button.addEventListener('click', onWidgetClick);
+  window.addEventListener('pointerdown', onActivityPointerDown, true);
+  window.addEventListener('keydown', onActivityKeydown, true);
+  window.addEventListener('resize', onResize);
+  motionQuery.addEventListener('change', onMotionPrefChange);
+  window.addEventListener('pagehide', cleanup);
+  state.rafId = requestAnimationFrame(renderWidget);
+}
+
+// ==========================================
 //  START
 // ==========================================
 document.body.style.overflow = 'hidden';
-window.addEventListener('load', () => requestAnimationFrame(animIntro));
+window.addEventListener('load', () => {
+  initCatWidget();
+  requestAnimationFrame(animIntro);
+});
 </script>
 <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
 <script src="js/booking.js" defer></script>
