@@ -10,6 +10,8 @@
   root.setAttribute('data-state', 'idle');
   root.setAttribute('data-blink', 'false');
   root.setAttribute('data-sleeping', 'false');
+  root.setAttribute('data-speaking', 'false');
+  root.setAttribute('data-dragging', 'false');
 
   root.innerHTML =
     '<button type="button" class="pp-pixel-cat-show" aria-label="Show orange pixel cat widget" hidden>Show cat</button>' +
@@ -37,9 +39,15 @@
             '<rect x="33" y="36" width="10" height="2" fill="#101010"/>' +
             '<rect x="53" y="36" width="10" height="2" fill="#101010"/>' +
           '</g>' +
-          '<rect x="46" y="44" width="4" height="3" fill="#101010"/>' +
-          '<rect x="42" y="49" width="4" height="2" fill="#101010"/>' +
-          '<rect x="50" y="49" width="4" height="2" fill="#101010"/>' +
+          '<g class="pp-cat-mouth-closed">' +
+            '<rect x="46" y="44" width="4" height="3" fill="#101010"/>' +
+            '<rect x="42" y="49" width="4" height="2" fill="#101010"/>' +
+            '<rect x="50" y="49" width="4" height="2" fill="#101010"/>' +
+          '</g>' +
+          '<g class="pp-cat-mouth-open">' +
+            '<rect x="43" y="46" width="10" height="7" fill="#101010"/>' +
+            '<rect x="45" y="48" width="6" height="3" fill="#ffd3a4"/>' +
+          '</g>' +
           '<rect x="26" y="70" width="12" height="8" fill="#ff7a1f"/>' +
           '<rect x="58" y="70" width="12" height="8" fill="#ff7a1f"/>' +
           '<rect x="72" y="58" width="16" height="4" fill="#ff7a1f"/>' +
@@ -47,6 +55,7 @@
         '</svg>' +
       '</button>' +
       '<span class="pp-cat-zzz" aria-hidden="true">Zz</span>' +
+      '<span class="pp-cat-speech" aria-live="polite"></span>' +
     '</div>';
 
   document.body.appendChild(root);
@@ -55,6 +64,8 @@
   var cat = root.querySelector('.pp-pixel-cat');
   var hideBtn = root.querySelector('.pp-pixel-cat-hide');
   var showBtn = root.querySelector('.pp-pixel-cat-show');
+  var speech = root.querySelector('.pp-cat-speech');
+  var CAT_CHAT = ['meow', '💓', 'wanna play....?'];
 
   var state = {
     hidden: false,
@@ -62,8 +73,22 @@
     reducedMotion: false,
     lastActivityAt: Date.now(),
     modeTimer: null,
-    blinkTimer: null
+    blinkTimer: null,
+    speechTimer: null,
+    sleepTimer: null,
+    moodTimer: null,
+    dx: 0,
+    dy: 0,
+    drag: null,
+    suppressClickUntil: 0
   };
+
+  function setOffset(dx, dy) {
+    state.dx = dx;
+    state.dy = dy;
+    root.style.setProperty('--pp-dx', Math.round(dx) + 'px');
+    root.style.setProperty('--pp-dy', Math.round(dy) + 'px');
+  }
 
   function setHidden(hidden) {
     state.hidden = hidden;
@@ -97,6 +122,7 @@
 
   function markActivity() {
     state.lastActivityAt = Date.now();
+    clearTimeout(state.sleepTimer);
     if (state.sleeping) setSleeping(false);
   }
 
@@ -113,6 +139,16 @@
       blinkOnce();
       scheduleBlink();
     }, delay);
+  }
+
+  function showSpeech(text, ttl) {
+    clearTimeout(state.speechTimer);
+    speech.textContent = text;
+    root.setAttribute('data-speaking', 'true');
+    state.speechTimer = setTimeout(function () {
+      root.setAttribute('data-speaking', 'false');
+      speech.textContent = '';
+    }, ttl || 1300);
   }
 
   function updateEyeTracking(clientX, clientY) {
@@ -137,8 +173,85 @@
   }
 
   function petReaction() {
+    if (Date.now() < state.suppressClickUntil) return;
     markActivity();
     setStateMode('happy', 780);
+    showSpeech(CAT_CHAT[Math.floor(Math.random() * CAT_CHAT.length)], 1400);
+  }
+
+  function maybeMoodShift() {
+    if (state.hidden || state.drag) return;
+    if (root.getAttribute('data-state') !== 'idle') return;
+    if (state.sleeping) return;
+    var idleFor = Date.now() - state.lastActivityAt;
+    if (idleFor > 18000) {
+      setSleeping(true);
+      return;
+    }
+    var roll = Math.random();
+    if (roll < 0.2) {
+      setStateMode('yawn', 1400);
+    } else if (roll < 0.28) {
+      setSleeping(true);
+      state.sleepTimer = setTimeout(function () {
+        if (state.sleeping && Date.now() - state.lastActivityAt < 18000) setSleeping(false);
+      }, 3500 + Math.floor(Math.random() * 2500));
+    }
+  }
+
+  function scheduleMood() {
+    clearTimeout(state.moodTimer);
+    state.moodTimer = setTimeout(function () {
+      maybeMoodShift();
+      scheduleMood();
+    }, 9000 + Math.floor(Math.random() * 7000));
+  }
+
+  function beginDrag(event) {
+    if (event.button !== 0) return;
+    markActivity();
+    var rect = root.getBoundingClientRect();
+    state.drag = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      startLeft: rect.left,
+      startTop: rect.top,
+      startDx: state.dx,
+      startDy: state.dy,
+      moved: false
+    };
+    root.setAttribute('data-dragging', 'true');
+    cat.setPointerCapture(event.pointerId);
+    event.preventDefault();
+  }
+
+  function dragMove(event) {
+    if (!state.drag || event.pointerId !== state.drag.pointerId) return;
+    var deltaX = event.clientX - state.drag.startX;
+    var deltaY = event.clientY - state.drag.startY;
+    if (Math.abs(deltaX) + Math.abs(deltaY) > 4) state.drag.moved = true;
+
+    var rect = root.getBoundingClientRect();
+    var nextLeft = state.drag.startLeft + deltaX;
+    var nextTop = state.drag.startTop + deltaY;
+    var min = 4;
+    var maxLeft = Math.max(min, window.innerWidth - rect.width - 4);
+    var maxTop = Math.max(min, window.innerHeight - rect.height - 4);
+    var clampedLeft = Math.min(maxLeft, Math.max(min, nextLeft));
+    var clampedTop = Math.min(maxTop, Math.max(min, nextTop));
+
+    setOffset(
+      state.drag.startDx + (clampedLeft - state.drag.startLeft),
+      state.drag.startDy + (clampedTop - state.drag.startTop)
+    );
+  }
+
+  function endDrag(event) {
+    if (!state.drag || event.pointerId !== state.drag.pointerId) return;
+    if (state.drag.moved) state.suppressClickUntil = Date.now() + 260;
+    state.drag = null;
+    root.setAttribute('data-dragging', 'false');
   }
 
   var media = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
@@ -160,6 +273,10 @@
     setHidden(false);
   });
   cat.addEventListener('click', petReaction);
+  cat.addEventListener('pointerdown', beginDrag);
+  cat.addEventListener('pointermove', dragMove);
+  cat.addEventListener('pointerup', endDrag);
+  cat.addEventListener('pointercancel', endDrag);
   cat.addEventListener('keydown', function (event) {
     if (event.key === 'Enter' || event.key === ' ') petReaction();
   });
@@ -180,4 +297,5 @@
 
   setHidden(localStorage.getItem(HIDE_KEY) === '1');
   scheduleBlink();
+  scheduleMood();
 })();
